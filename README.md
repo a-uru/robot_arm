@@ -1,92 +1,147 @@
-# ロボットアーム開発
+# Robot Arm Development
 
-## 概要
-オープンソースのロボットアームを用いて、個人でロボットの知能の研究をするプロジェクト
+## Overview
 
-2025/10/30ではPS4コントローラーからのテレオペレーションが出来た
+This is a personal research project focused on robot intelligence using open-source robot arm platforms.
 
-2026/6までは学ロボで忙しいため進捗は遅い
+**Current Status:**
+- ✅ PS4 controller teleoperation implemented (October 30, 2025)
+- 🔄 Progress will be slower until June 2026 due to school robotics commitments
 
-## 使い方(テレオペ)
-1. PS4コントローラーの接続:
+**Key Features:**
+- ROS2-based robot arm control system
+- Teleoperation with PS4 controller
+- Camera integration for visual feedback
+- RViz visualization support
+
+---
+
+## Table of Contents
+
+- [Teleoperation Setup](#teleoperation-setup)
+- [Camera Setup](#camera-setup)
+- [Troubleshooting](#troubleshooting)
+
+---
+
+## Teleoperation Setup
+
+Follow these steps to operate the robot arm with a PS4 controller:
+
+### Step 1: Connect PS4 Controller
+Start the joy node to interface with the PS4 controller:
 ```bash
 ros2 run joy joy_node
 ```
-2. 実機との接続(ロボットアームが初期位置に移動するので注意)
+
+### Step 2: Connect to Hardware
+⚠️ **Warning:** The robot arm will move to its initial position upon connection.
+
 ```bash
 cd ~/robot_arm
 source install/setup.bash
 ros2 run so101_hw_interface so101_motor_bridge
 ```
-3. rvizによる可視化
+
+### Step 3: Launch RViz Visualization
+Visualize the robot arm state in RViz:
 ```bash
 cd ~/robot_arm
 source install/setup.bash
-ros2 launch so101_follower_description display.launch.py     use_gui:=false     joint_states_topic:=/so101_follower/joint_states
+ros2 launch so101_follower_description display.launch.py \
+    use_gui:=false \
+    joint_states_topic:=/so101_follower/joint_states
 ```
-4. コントロールノードの起動
+
+### Step 4: Start Control Node
+Launch the control interface:
 ```bash
 cd ~/robot_arm/Lerobot_ros2/src/so101_hw_interface/controll/
 python3 keyboard_controller.py
 ```
 
-## 使い方(カメラ)
+---
 
-### 利用可能なカメラデバイスの確認
-システムに接続されているカメラを確認:
+## Camera Setup
+
+### List Available Camera Devices
+
+Check connected cameras on your system:
 ```bash
 v4l2-ctl --list-devices
 ```
 
-現在のシステムでは以下のカメラが利用可能:
-- **Integrated Camera** (内蔵カメラ): `/dev/video0`, `/dev/video1`
-- **XWF-1080p6 Camera** (外付けカメラ): `/dev/video2`, `/dev/video3`
+**Available cameras on this system:**
+- **Integrated Camera** (built-in): `/dev/video0`, `/dev/video1`
+- **XWF-1080p6 Camera** (external): `/dev/video2`, `/dev/video3`
 
-### カメラノードの起動
-外付けカメラ (XWF-1080p6) を使用する場合:
+### Launch Camera Node
+
+**For external camera (XWF-1080p6):**
 ```bash
 cd ~/robot_arm
 source install/setup.bash
 ros2 run v4l2_camera v4l2_camera_node --ros-args -p video_device:=/dev/video2
 ```
 
-内蔵カメラを使用する場合:
+**For built-in camera:**
 ```bash
+cd ~/robot_arm
+source install/setup.bash
 ros2 run v4l2_camera v4l2_camera_node --ros-args -p video_device:=/dev/video0
 ```
 
-### カメラ映像の確認
-カメラノード起動後、以下のいずれかの方法で映像を確認できます:
+### View Camera Feed
 
-#### 方法1: rqt_image_view を使用
+After launching the camera node, use one of the following methods to view the feed:
+
+#### Method 1: Using rqt_image_view
 ```bash
 cd ~/robot_arm
 source install/setup.bash
 ros2 run rqt_image_view rqt_image_view
 ```
-起動後、ウィンドウ左上のドロップダウンメニューから `/image_raw` を選択
+Select `/image_raw` from the dropdown menu in the top-left corner.
 
-#### 方法2: RViz を使用
-RVizを起動後:
-1. 左下の「Add」ボタンをクリック
-2. 「By display type」→「Image」を選択
-3. 追加したImageディスプレイの「Image Topic」を `/image_raw` に設定
+#### Method 2: Using RViz
+After launching RViz:
+1. Click the **"Add"** button in the bottom-left
+2. Select **"By display type"** → **"Image"**
+3. Set the **"Image Topic"** to `/image_raw`
 
-### カメラのトピック
-- `/image_raw`: カメラ画像 (sensor_msgs/msg/Image)
-  - 解像度: 640x480
-  - エンコーディング: rgb8
-- `/camera_info`: カメラ情報 (sensor_msgs/msg/CameraInfo)
+### Camera Topics
 
-### トラブルシューティング
-映像が表示されない場合:
+- `/image_raw` - Camera image (sensor_msgs/msg/Image)
+  - Resolution: 640x480
+  - Encoding: rgb8
+- `/camera_info` - Camera calibration info (sensor_msgs/msg/CameraInfo)
+
+---
+
+## Troubleshooting
+
+### Camera Feed Not Displaying
+
+Check if topics are being published:
 ```bash
-# トピックが配信されているか確認
+# List image-related topics
 ros2 topic list | grep image
 
-# 画像データが流れているか確認
+# Check publishing frequency
 ros2 topic hz /image_raw
 
-# 画像メッセージの内容を確認
+# View a single message
 ros2 topic echo /image_raw --once
 ```
+
+### Common Issues
+
+- **No video device found:** Check device permissions and ensure the camera is properly connected
+- **Permission denied:** Run `sudo chmod 666 /dev/video*` or add your user to the `video` group
+- **Low frame rate:** Reduce image resolution or check USB bandwidth
+
+---
+
+## License
+
+This project is open source. Please check individual package licenses for details.
