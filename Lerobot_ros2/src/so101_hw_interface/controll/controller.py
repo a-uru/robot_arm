@@ -42,8 +42,8 @@ class PS4ArmBridge(Node):
         }
 
         # 制御パラメータ
-        self.scale = 0.02  # 軸の入力値を角度増分(rad)に変換するスケール
-        self.button_step = 0.025  # ボタン押下時の角度増分（固定）
+        self.scale = 0.015  # 軸の入力値を角度増分(rad)に変換するスケール
+        self.button_step = 0.03  # ボタン押下時の角度増分（固定）
         self.deadzone = 0.1  # デッドゾーン（スティックの遊び）
 
         # デバッグ用フラグとカウンター
@@ -54,9 +54,10 @@ class PS4ArmBridge(Node):
         # 最後に受信したJoyメッセージのタイムスタンプ
         self.last_joy_time = None
         
-        # チャタリング防止用: 各ボタンの最後の押下時刻
+        # チャタリング防止用: 各ボタンの最後の押下時刻と状態
         self.last_button_press_time = {}
-        self.button_debounce_time = 0.3  # デバウンス時間（秒）- PSボタン用
+        self.last_button_state = {}  # 前回のボタン状態を記録
+        self.button_repeat_time = 0.05  # ボタンを押し続けた時の繰り返し間隔（秒）
 
         # 定期的にコマンドを送信（20Hz）
         self.timer = self.create_timer(0.05, self.publish_joint_state)
@@ -79,6 +80,44 @@ class PS4ArmBridge(Node):
             return 0.0
         return value
 
+    def can_press_button(self, button_id, is_pressed, allow_repeat=True):
+        """ボタンが押下可能かチェック
+        
+        Args:
+            button_id: ボタンID
+            is_pressed: ボタンが押されているか
+            allow_repeat: 押し続けた時にリピートを許可するか（False=エッジ検出のみ）
+        """
+        current_time = self.get_clock().now()
+        
+        # ボタンが押されていない場合
+        if not is_pressed:
+            self.last_button_state[button_id] = False
+            return False
+        
+        # 前回の状態を取得（初回はFalse）
+        was_pressed = self.last_button_state.get(button_id, False)
+        
+        # ボタンが新しく押された場合（エッジ）
+        if not was_pressed:
+            self.last_button_state[button_id] = True
+            self.last_button_press_time[button_id] = current_time
+            return True
+        
+        # リピートが許可されていない場合は、ここで終了（エッジ検出のみ）
+        if not allow_repeat:
+            return False
+        
+        # ボタンが押し続けられている場合（リピート許可時のみ）
+        # 最後の実行から一定時間経過していればOK
+        if button_id in self.last_button_press_time:
+            time_since_last = (current_time - self.last_button_press_time[button_id]).nanoseconds / 1e9
+            if time_since_last >= self.button_repeat_time:
+                self.last_button_press_time[button_id] = current_time
+                return True
+        
+        return False
+
     def joy_cb(self, msg: Joy):
         """ジョイスティック入力のコールバック"""
         # Joyメッセージ受信時刻を記録
@@ -98,6 +137,11 @@ class PS4ArmBridge(Node):
                 if axis_value != 0.0:
                     # 角度の増分を計算して加算
                     delta = - axis_value * self.scale
+                    
+                    # 十字ボタン左右（軸6）は符号を反転
+                    if idx == 6:
+                        delta = -delta
+                    
                     old_pos = self.joint_positions[joint]
                     self.joint_positions[joint] += delta
                     changed = True
@@ -109,7 +153,7 @@ class PS4ArmBridge(Node):
         # ボタン押下による各ジョイント操作（固定増分方式）
         if len(msg.buttons) > 10:
             # △ボタン(2) - elbow_flex を上げる
-            if msg.buttons[2]:
+            if self.can_press_button(2, msg.buttons[2]):
                 old_pos = self.joint_positions["elbow_flex"]
                 self.joint_positions["elbow_flex"] -= self.button_step
                 changed = True
@@ -118,7 +162,7 @@ class PS4ArmBridge(Node):
                 )
             
             # ☓ボタン(0) - elbow_flex を下げる
-            if msg.buttons[0]:
+            if self.can_press_button(0, msg.buttons[0]):
                 old_pos = self.joint_positions["elbow_flex"]
                 self.joint_positions["elbow_flex"] += self.button_step
                 changed = True
@@ -127,7 +171,7 @@ class PS4ArmBridge(Node):
                 )
             
             # □ボタン(3) - wrist_flex を上げる
-            if msg.buttons[3]:
+            if self.can_press_button(3, msg.buttons[3]):
                 old_pos = self.joint_positions["wrist_flex"]
                 self.joint_positions["wrist_flex"] += self.button_step
                 changed = True
@@ -136,7 +180,7 @@ class PS4ArmBridge(Node):
                 )
             
             # ○ボタン(1) - wrist_flex を下げる
-            if msg.buttons[1]:
+            if self.can_press_button(1, msg.buttons[1]):
                 old_pos = self.joint_positions["wrist_flex"]
                 self.joint_positions["wrist_flex"] -= self.button_step
                 changed = True
@@ -145,7 +189,7 @@ class PS4ArmBridge(Node):
                 )
             
             # L1ボタン(4) - wrist_roll を左回転
-            if msg.buttons[4]:
+            if self.can_press_button(4, msg.buttons[4]):
                 old_pos = self.joint_positions["wrist_roll"]
                 self.joint_positions["wrist_roll"] -= self.button_step
                 changed = True
@@ -154,7 +198,7 @@ class PS4ArmBridge(Node):
                 )
             
             # R1ボタン(5) - wrist_roll を右回転
-            if msg.buttons[5]:
+            if self.can_press_button(5, msg.buttons[5]):
                 old_pos = self.joint_positions["wrist_roll"]
                 self.joint_positions["wrist_roll"] += self.button_step
                 changed = True
@@ -162,37 +206,20 @@ class PS4ArmBridge(Node):
                     f"[R1 BTN] wrist_roll: {old_pos:.3f} -> {self.joint_positions['wrist_roll']:.3f} (+{self.button_step})"
                 )
             
-            # PSボタン(10) - gripper の開閉切り替え（チャタリング防止付き）
-            if msg.buttons[10]:
-                current_time = self.get_clock().now()
-                button_id = 10
-                
-                # 最後に押してから十分な時間が経過したかチェック
-                if button_id not in self.last_button_press_time:
-                    can_press = True
+            # PSボタン(10) - gripper の開閉切り替え（リピートなし=エッジ検出のみ）
+            if self.can_press_button(10, msg.buttons[10], allow_repeat=False):
+                old_pos = self.joint_positions["gripper"]
+                # 現在の値に応じて開閉を切り替え
+                if self.joint_positions["gripper"] < 0:
+                    self.joint_positions["gripper"] = 0.5  # 開く
+                    action = "OPEN"
                 else:
-                    time_since_last_press = (current_time - self.last_button_press_time[button_id]).nanoseconds / 1e9
-                    can_press = time_since_last_press >= self.button_debounce_time
-                
-                if can_press:
-                    old_pos = self.joint_positions["gripper"]
-                    # 現在の値に応じて開閉を切り替え
-                    if self.joint_positions["gripper"] < 0:
-                        self.joint_positions["gripper"] = 0.5  # 開く
-                        action = "OPEN"
-                    else:
-                        self.joint_positions["gripper"] = -0.5  # 閉じる
-                        action = "CLOSE"
-                    changed = True
-                    self.last_button_press_time[button_id] = current_time
-                    self.get_logger().info(
-                        f"[PS BTN] gripper: {old_pos:.3f} -> {self.joint_positions['gripper']:.3f} ({action})"
-                    )
-                else:
-                    time_since_last_press = (current_time - self.last_button_press_time[button_id]).nanoseconds / 1e9
-                    self.get_logger().debug(
-                        f"[PS BTN] Debouncing... wait {self.button_debounce_time - time_since_last_press:.2f}s"
-                    )
+                    self.joint_positions["gripper"] = -0.5  # 閉じる
+                    action = "CLOSE"
+                changed = True
+                self.get_logger().info(
+                    f"[PS BTN] gripper: {old_pos:.3f} -> {self.joint_positions['gripper']:.3f} ({action})"
+                )
         
         # 変更があった場合は全ジョイントの状態を表示
         if changed:
