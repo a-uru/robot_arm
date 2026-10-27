@@ -21,7 +21,7 @@ setup(
         (os.path.join('lib', package_name), ['scripts/so101_motor_bridge', 'scripts/so101_calibrate', 'scripts/so101_read_steps']),
         ('share/ament_index/resource_index/executables', ['resource/so101_motor_bridge', 'resource/so101_calibrate', 'resource/so101_read_steps']),
     ],
-    install_requires=['setuptools'],
+    install_requires=['setuptools', 'feetech-servo-sdk>=1.0.0,<2', 'deepdiff', 'tqdm'],
     zip_safe=True,
     maintainer='hls',
     maintainer_email='hls@todo.todo',
@@ -34,4 +34,4 @@ setup(
             'so101_read_steps = so101_hw_interface.read_motor_steps:main',
         ],
     },
-) 
+)
