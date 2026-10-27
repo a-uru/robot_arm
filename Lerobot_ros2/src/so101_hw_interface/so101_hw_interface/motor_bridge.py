@@ -15,36 +15,9 @@ from __future__ import annotations
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
-import sys
 import math
 import yaml, pathlib
 from ament_index_python.packages import get_package_share_directory
-
-# -----------------------------------------------------------------------------
-# Provide lightweight stubs for optional third-party dependencies that the
-# Feetech SDK imports but are not strictly required to operate the motors.
-# -----------------------------------------------------------------------------
-try:
-    import deepdiff  # type: ignore
-except ImportError:  # create stub
-    import types
-    deepdiff_stub = types.ModuleType("deepdiff")
-    class _DD(dict):
-        pass
-    deepdiff_stub.DeepDiff = _DD  # type: ignore
-    sys.modules["deepdiff"] = deepdiff_stub
-
-try:
-    import tqdm  # type: ignore
-except ImportError:  # create stub
-    import types
-    tqdm_stub = types.ModuleType("tqdm")
-    def _tqdm(iterable=None, **kwargs):
-        return iterable if iterable is not None else []
-    tqdm_stub.tqdm = _tqdm  # type: ignore
-    sys.modules["tqdm"] = tqdm_stub
-
-# -----------------------------------------------------------------------------
 
 from so101_hw_interface.motors.feetech.feetech import FeetechMotorsBus
 from so101_hw_interface.motors import Motor, MotorNormMode

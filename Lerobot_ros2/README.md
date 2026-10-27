@@ -58,7 +58,13 @@ cd Lerobot_ros2
 2. Install dependencies:
 ```bash
 rosdep install --from-paths src --ignore-src -r -y
+python3 -m pip install --user 'feetech-servo-sdk>=1.0.0,<2' deepdiff tqdm
 ```
+
+This Python dependency provides `scservo_sdk` for the motor bridge. If pip is
+missing, install `python3-pip` first. On Ubuntu environments where pip reports
+`externally-managed-environment`, add `--break-system-packages` to the command
+above when installing into the user site.
 
 3. Build the workspace:
 ```bash
