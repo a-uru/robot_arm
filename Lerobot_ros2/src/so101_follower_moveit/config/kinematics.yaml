@@ -1,4 +1,6 @@
 arm:
   kinematics_solver: kdl_kinematics_plugin/KDLKinematicsPlugin
-  kinematics_solver_search_resolution: 0.0050000000000000001
-  kinematics_solver_timeout: 0.0050000000000000001
+  kinematics_solver_search_resolution: 0.005
+  kinematics_solver_timeout: 0.1
+  # The arm has five axes: solve position without imposing all three orientation axes.
+  position_only_ik: true

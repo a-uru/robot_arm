@@ -44,6 +44,7 @@ class MotorBridge(Node):
     def __init__(self):
         super().__init__("so101_motor_bridge")
         # Declare parameters so they can be overridden from launch/CLI
+        self.declare_parameter("move_to_midpoint", True)
         self.declare_parameter("port", PORT_DEFAULT)
         self.declare_parameter("calib_file", str(CALIB_FILE))
 
@@ -101,14 +102,17 @@ class MotorBridge(Node):
 
         # Flag to ensure we only command the initial middle position once
         self._initial_move_done = False
+        self._commands_initialized = False
 
     # ---------------------------------------------------------------------
     # Callbacks
     # ---------------------------------------------------------------------
     def _command_cb(self, msg: JointState):
         """Store desired joint positions from topic (rad)."""
+        if not self._commands_initialized:
+            return
         for name, pos in zip(msg.name, msg.position):
-            if name in self.current_commands:
+            if name in self.current_commands and math.isfinite(pos):
                 self.current_commands[name] = pos
 
     def _timer_cb(self):
@@ -130,6 +134,12 @@ class MotorBridge(Node):
             self.get_logger().warn(f"sync_read failed: {exc}")
             return
 
+        # Initialize every joint from feedback before accepting any external command.
+        # MoveIt must start from the measured pose, including when calibration is absent.
+        if not self._commands_initialized:
+            self.current_commands.update(positions)
+            self._commands_initialized = True
+
         # Publish joint states
         js = JointState()
         js.header.stamp = self.get_clock().now().to_msg()
@@ -146,7 +156,8 @@ class MotorBridge(Node):
         # on startup without relying on external controllers.
         # -----------------------------------------------------------------
         if (
-            not self._initial_move_done
+            self.get_parameter("move_to_midpoint").value
+            and not self._initial_move_done
             and self._home_offsets is not None
             and self._limits is not None
         ):
@@ -171,16 +182,6 @@ class MotorBridge(Node):
                     low, high = self._limits[n]
                     raw = max(low, min(high, raw))
                 raw_goals[n] = raw
-            if n == "gripper":
-                home = self._home_offsets.get(n, 0)
-                low, high = self._limits[n]
-                self.get_logger().info(
-                    f"[gripper debug] home={home}, low={low}, high={high}, rad={rad:.3f}, raw(before clamp)={int(home + rad * self._steps_per_rad)}"
-                )
-
-            # 書き込み前に追加
-            self.get_logger().info(f"Planned raw goals (gripper): {raw_goals.get('gripper')}")
-
             self.bus.sync_write("Goal_Position", raw_goals, normalize=False)
         except Exception as exc:  # noqa: BLE001
             self.get_logger().warn(f"sync_write failed: {exc}")

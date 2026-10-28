@@ -1,0 +1,62 @@
+{
+  "speed_comparison": [
+    {
+      "variant": "current",
+      "scaling": 0.1,
+      "duration_s": 21.009858394,
+      "peak_velocity_rad_s": 0.0500000000000212,
+      "points": 211
+    },
+    {
+      "variant": "current",
+      "scaling": 1.0,
+      "duration_s": 3.077486077,
+      "peak_velocity_rad_s": 0.5000000000000314,
+      "points": 31
+    },
+    {
+      "variant": "no_ruckig",
+      "scaling": 0.1,
+      "duration_s": 20.999892208,
+      "peak_velocity_rad_s": 0.050000000000086725,
+      "points": 211
+    },
+    {
+      "variant": "no_ruckig",
+      "scaling": 1.0,
+      "duration_s": 2.999986962,
+      "peak_velocity_rad_s": 0.5000000000000462,
+      "points": 31
+    },
+    {
+      "variant": "jerk_5",
+      "scaling": 0.1,
+      "duration_s": 21.009943697,
+      "peak_velocity_rad_s": 0.05000000000008905,
+      "points": 211
+    },
+    {
+      "variant": "jerk_5",
+      "scaling": 1.0,
+      "duration_s": 3.010115666,
+      "peak_velocity_rad_s": 0.5000000000000605,
+      "points": 31
+    }
+  ],
+  "timeout_comparison": [
+    {
+      "variant": "previous",
+      "margin": 0.5,
+      "moveit_error_code": -6,
+      "cancelled": true,
+      "wall_s": 1.158
+    },
+    {
+      "variant": "fixed",
+      "margin": 3.0,
+      "moveit_error_code": 1,
+      "cancelled": false,
+      "wall_s": 1.842
+    }
+  ]
+}
