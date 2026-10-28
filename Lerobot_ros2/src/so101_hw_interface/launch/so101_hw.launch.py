@@ -20,6 +20,7 @@ def generate_launch_description():
                     "so101_follower.urdf.xacro",
                 ]
             ),
+            " include_ros2_control:=true",
         ]
     )
     robot_description = {"robot_description": robot_description_content}

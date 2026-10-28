@@ -1,39 +1,64 @@
-# joint_limits.yaml allows the dynamics properties specified in the URDF to be overwritten or augmented as needed
-
-# For beginners, we downscale velocity and acceleration limits.
-# You can always specify higher scaling factors (<= 1.0) in your motion requests.  # Increase the values below to 1.0 to always move at maximum speed.
+# Position limits match the bundled so101_calibration.yaml (4096 steps per revolution).
 default_velocity_scaling_factor: 0.1
 default_acceleration_scaling_factor: 0.1
-
-# Specific joint properties can be changed with the keys [max_position, min_position, max_velocity, max_acceleration]
-# Joint limits can be turned off with [has_velocity_limits, has_acceleration_limits]
 joint_limits:
-  elbow_flex:
+  shoulder_pan:
+    has_position_limits: true
+    min_position: -1.750272
+    max_position: 1.751806
     has_velocity_limits: true
-    max_velocity: 10.0    
-    has_acceleration_limits: false
-    max_acceleration: 0.0
-  gripper:
-    has_velocity_limits: true
-    max_velocity: 10.0
-    has_acceleration_limits: false
-    max_acceleration: 0.0
+    max_velocity: 0.5
+    has_acceleration_limits: true
+    max_acceleration: 0.5
+    has_jerk_limits: true
+    max_jerk: 1.0
   shoulder_lift:
+    has_position_limits: true
+    min_position: -1.688912
+    max_position: 1.690446
     has_velocity_limits: true
-    max_velocity: 10.0  
-    has_acceleration_limits: false
-    max_acceleration: 0.0
+    max_velocity: 0.5
+    has_acceleration_limits: true
+    max_acceleration: 0.5
+    has_jerk_limits: true
+    max_jerk: 1.0
+  elbow_flex:
+    has_position_limits: true
+    min_position: -1.632155
+    max_position: 1.633689
     has_velocity_limits: true
-    max_velocity: 10.0
-    has_acceleration_limits: false
-    max_acceleration: 0.0 
+    max_velocity: 0.5
+    has_acceleration_limits: true
+    max_acceleration: 0.5
+    has_jerk_limits: true
+    max_jerk: 1.0
   wrist_flex:
+    has_position_limits: true
+    min_position: -1.681242
+    max_position: 1.682776
     has_velocity_limits: true
-    max_velocity: 10.0
-    has_acceleration_limits: false
-    max_acceleration: 0.0
+    max_velocity: 0.5
+    has_acceleration_limits: true
+    max_acceleration: 0.5
+    has_jerk_limits: true
+    max_jerk: 1.0
   wrist_roll:
+    has_position_limits: true
+    min_position: -1.612213
+    max_position: 1.612213
     has_velocity_limits: true
-    max_velocity: 10.0
-    has_acceleration_limits: false
-    max_acceleration: 0.0
+    max_velocity: 0.5
+    has_acceleration_limits: true
+    max_acceleration: 0.5
+    has_jerk_limits: true
+    max_jerk: 1.0
+  gripper:
+    has_position_limits: true
+    min_position: -0.222427
+    max_position: 0.868233
+    has_velocity_limits: true
+    max_velocity: 0.5
+    has_acceleration_limits: true
+    max_acceleration: 0.5
+    has_jerk_limits: true
+    max_jerk: 1.0

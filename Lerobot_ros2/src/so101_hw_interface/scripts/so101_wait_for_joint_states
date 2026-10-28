@@ -1,0 +1,5 @@
+#!/usr/bin/env python3
+from so101_hw_interface.wait_for_joint_states import main
+
+if __name__ == "__main__":
+    main()

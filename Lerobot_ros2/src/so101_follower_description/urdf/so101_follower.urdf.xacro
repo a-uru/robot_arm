@@ -2,8 +2,12 @@
 <!-- Generated using onshape-to-robot -->
 <!-- Onshape https://cad.onshape.com/documents/7715cc284bb430fe6dab4ffd/w/4fd0791b683777b02f8d975a/e/826c553ede3b7592eb9ca800 -->
 <robot name="so101_follower" xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <!-- MoveIt adds its own control block; the legacy hardware launch opts in. -->
+  <xacro:arg name="include_ros2_control" default="false"/>
+  <xacro:if value="$(arg include_ros2_control)">
+    <xacro:include filename="$(find so101_hw_interface)/urdf/so101_follower.urdf"/>
+  </xacro:if>
 
-  <xacro:include filename="$(find so101_hw_interface)/urdf/so101_follower.urdf" />
 
   <!-- World Link -->
   <link name="world"/>
@@ -331,8 +335,7 @@
     <parent link="gripper_link"/>
     <child link="jaw_link"/>
     <axis xyz="0 0 1"/>
-    <!-- calibrated limits: raw(2047,3489) home(2768) = (-1.110,+1.109) rad -->
-    <limit effort="10" velocity="10" lower="-0.6" upper="1.74533"/>
+    <limit effort="10" velocity="10" lower="-0.222427" upper="0.868233"/>
   </joint>
 
   <transmission name="gripper_trans">
@@ -352,8 +355,7 @@
     <parent link="wrist_link"/>
     <child link="gripper_link"/>
     <axis xyz="0 0 1"/>
-    <!-- calibrated limits: raw(0,4766) home(2084) = (-3.194,+4.120) rad -->
-    <limit effort="10" velocity="10" lower="-3.194" upper="4.120"/>
+    <limit effort="10" velocity="10" lower="-1.612213" upper="1.612213"/>
   </joint>
 
   <transmission name="wrist_roll_trans">
@@ -373,8 +375,7 @@
     <parent link="lower_arm_link"/>
     <child link="wrist_link"/>
     <axis xyz="0 0 1"/>
-    <!-- calibrated limits: raw(588,2917) home(1752) = (-1.786,+1.790) rad -->
-    <limit effort="10" velocity="10" lower="-1.786" upper="1.790"/>
+    <limit effort="10" velocity="10" lower="-1.681242" upper="1.682776"/>
   </joint>
 
   <transmission name="wrist_flex_trans">
@@ -394,8 +395,7 @@
     <parent link="upper_arm_link"/>
     <child link="lower_arm_link"/>
     <axis xyz="0 0 1"/>
-    <!-- calibrated limits: raw(976,3130) home(2053) = (-1.653,+1.654) rad -->
-    <limit effort="10" velocity="10" lower="-1.653" upper="1.654"/>
+    <limit effort="10" velocity="10" lower="-1.632155" upper="1.633689"/>
   </joint>
 
   <transmission name="elbow_flex_trans">
@@ -415,8 +415,7 @@
     <parent link="shoulder_link"/>
     <child link="upper_arm_link"/>
     <axis xyz="0 0 1"/>
-    <!-- calibrated limits: raw(740,3370) home(2055) = (-2.018,+2.018) rad -->
-    <limit effort="10" velocity="10" lower="-2.018" upper="2.018"/>
+    <limit effort="10" velocity="10" lower="-1.688912" upper="1.690446"/>
   </joint>
 
   <transmission name="shoulder_lift_trans">
@@ -436,8 +435,7 @@
     <parent link="base_link"/>
     <child link="shoulder_link"/>
     <axis xyz="0 0 1"/>
-    <!-- calibrated limits: raw(745,3424) home(2084) = (-2.055,+2.058) rad -->
-    <limit effort="10" velocity="10" lower="-2.055" upper="2.058"/>
+    <limit effort="10" velocity="10" lower="-1.750272" upper="1.751806"/>
   </joint>
 
   <transmission name="shoulder_pan_trans">

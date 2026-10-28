@@ -15,6 +15,7 @@
 
 - [初期設定](#初期設定)
 - [遠隔操作の手順](#遠隔操作の手順)
+- [MoveIt 2 による操作](#moveit-2-による操作)
 - [カメラの設定](#カメラの設定)
 - [トラブルシューティング](#トラブルシューティング)
 - [今回の修正と確認内容](#今回の修正と確認内容)
@@ -118,6 +119,70 @@ ros2 launch so101_follower_description display.launch.py \
 cd ~/robot_arm/Lerobot_ros2/src/so101_hw_interface/controll/
 python3 keyboard_controller.py
 ```
+
+## MoveIt 2 による操作
+
+ROS 2 Jazzy で、アームの5関節とグリッパーの1関節を制御します。軌道は MoveIt 2 → `JointTrajectoryController` → トピック接続 → `so101_motor_bridge` の順に実機へ渡します。
+
+### 依存パッケージとビルド
+
+```bash
+sudo apt-get install -y ros-jazzy-moveit ros-jazzy-joint-state-topic-hardware-interface ros-jazzy-ros2-controllers
+cd ~/robot_arm
+source /opt/ros/jazzy/setup.bash
+colcon build --build-base build/moveit --packages-select so101_follower_description so101_hw_interface so101_follower_moveit --symlink-install --cmake-args -DBUILD_TESTING=OFF
+source install/setup.bash
+```
+
+`build/moveit` は、階層変更前のパスを記録したビルドキャッシュと分けるために使用しています。Python の依存ライブラリと `dialout` の設定も、[初期設定](#初期設定)に従って済ませてください。
+
+### 模擬アームで計画・実行を試す
+
+```bash
+ros2 launch so101_follower_moveit demo.launch.py
+```
+
+既定では模擬ハードウェアを使い、実機には接続しません。RViz の「MotionPlanning」で「Planning Group」を `arm` にし、目標の関節角度を設定して「Plan」、続けて「Execute」を押します。グリッパーは `gripper` グループで操作します。
+
+アームは5軸のため、逆運動学は位置のみを対象としています。手先の位置と任意の3軸姿勢を同時に指定することはできません。最初は関節角度による目標指定で動作を確認してください。
+
+### 実機を動かす
+
+先に起動した `so101_motor_bridge` やコントローラー、遠隔操作プログラムを停止し、アームの周囲を確認してください。実機モードではモーターブリッジも一緒に起動します。
+
+```bash
+cd ~/robot_arm
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+ros2 launch so101_follower_moveit demo.launch.py use_fake_hardware:=false port:=/dev/ttyACM0
+```
+
+この起動方法では、接続時に可動範囲の中央へ移動する処理を無効にし、最初に読み取った現在位置を保持します。6関節の位置情報を受信してから軌道コントローラーを起動します。RViz で計画を確認し、「Execute」で実機へ指令を送ってください。
+
+付属の `so101_calibration.yaml` に合わせて関節可動範囲を設定し、計画上限を速度 0.5 rad/s、加速度 0.5 rad/s²、既定の倍率をそれぞれ 0.1 にしています。キャリブレーションは実機固有のため、別のアームや再調整後は、キャリブレーションと URDF・`joint_limits.yaml` の可動範囲を一致させてください。
+
+独自のキャリブレーションを使う場合は `calib_file:=/絶対パス/設定.yaml` を追加できます。既に別途ブリッジを起動している場合は `start_motor_bridge:=false` を追加してください。その場合も、ブリッジは `--ros-args -p move_to_midpoint:=false` を付けて起動してください。画面なしで起動する場合は `use_rviz:=false` を追加します。
+
+### 起動状態の確認
+
+別のターミナルで環境設定を読み込んで確認します。
+
+```bash
+source /opt/ros/jazzy/setup.bash
+source ~/robot_arm/install/setup.bash
+ros2 control list_controllers
+ros2 action list
+ros2 topic echo /joint_states --once
+```
+
+`joint_state_broadcaster`、`arm_controller`、`gripper_controller` がすべて `active` になり、次のアクションが表示されれば軌道を受け付ける状態です。
+
+- `/arm_controller/follow_joint_trajectory`
+- `/gripper_controller/follow_joint_trajectory`
+
+位置情報待ちで終了する場合は、シリアルポート、アクセス権限、モーターブリッジのエラーを確認してください。
+
+模擬モードでは、アーム・グリッパー両方で MoveIt による計画、軌道実行、関節位置の到達を確認しました。実機用のトピック接続についても、模擬フィードバックで現在位置の保持と計画・実行を確認しました。シリアル接続した実機での軌道実行は未確認です。
 
 ## カメラの設定
 
@@ -241,3 +306,9 @@ ros2 topic echo /image_raw --once
 ## ライセンス
 
 本プロジェクトはオープンソースです。詳細は各パッケージのライセンスを確認してください。
+
+### 開始・停止時の動きを滑らかにする設定
+
+OMPL の時間パラメーター計算後に Ruckig による軌道平滑化を適用しています。各関節の加速度の変化率（ジャーク）は `joint_limits.yaml` の `max_jerk: 1.0` rad/s³ を初期調整値としています。実機性能を測定した上限ではありません。設定変更後は MoveIt を再起動し、軌道を再計画してください。実機の引っ掛かりが残る場合は、低い速度・加速度倍率で再確認し、モーター側の加減速設定や機械的な遊びも切り分けてください。
+
+開始・停止時の指令段差と倍率1.0時の速度については、[実機動作の調査記録](docs/so101_motion_investigation.md)に、ログとの照合結果、実行時間監視の修正、速度比較をまとめています。
