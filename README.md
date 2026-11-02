@@ -16,6 +16,7 @@
 - [初期設定](#初期設定)
 - [遠隔操作の手順](#遠隔操作の手順)
 - [MoveIt 2 による操作](#moveit-2-による操作)
+- [MoveIt Servo による位置追従](docs/so101_servo.md)
 - [カメラの設定](#カメラの設定)
 - [トラブルシューティング](#トラブルシューティング)
 - [今回の修正と確認内容](#今回の修正と確認内容)
@@ -312,3 +313,13 @@ ros2 topic echo /image_raw --once
 OMPL の時間パラメーター計算後に Ruckig による軌道平滑化を適用しています。各関節の加速度の変化率（ジャーク）は `joint_limits.yaml` の `max_jerk: 1.0` rad/s³ を初期調整値としています。実機性能を測定した上限ではありません。設定変更後は MoveIt を再起動し、軌道を再計画してください。実機の引っ掛かりが残る場合は、低い速度・加速度倍率で再確認し、モーター側の加減速設定や機械的な遊びも切り分けてください。
 
 開始・停止時の指令段差と倍率1.0時の速度については、[実機動作の調査記録](docs/so101_motion_investigation.md)に、ログとの照合結果、実行時間監視の修正、速度比較をまとめています。
+
+## MoveIt Servo による位置追従
+
+リアルタイムに更新される3次元位置へ手先を追従させる構成を追加しました。[起動・目標トピック・停止条件](docs/so101_servo.md)を参照してください。模擬モードは `ros2 launch so101_follower_moveit servo.launch.py`、実機は `use_fake_hardware:=false port:=/dev/ttyACM0` を追加します。
+
+RVizで目標をドラッグする場合は、Servo起動時に `interactive_target:=true` を追加してください。[操作手順](docs/so101_servo.md#rviz-のマウス操作で目標を指定する)を参照してください。
+
+Servoの制御点を指先へ移す場合は `tip_offset_x/y/z`（tip_frameのローカル座標、単位m）を指定してください。速度は `max_linear_speed`、`max_joint_speed`、`max_joint_acceleration`、`gain` で調整できます。[設定例](docs/so101_servo.md#指先の位置を手動オフセットで指定する)を参照してください。
+
+Servoの指先オフセット・最高速度などは [servo_tracking.yaml](Lerobot_ros2/src/so101_follower_moveit/config/servo_tracking.yaml) にまとめています。このファイルを編集してからServoを再起動してください。

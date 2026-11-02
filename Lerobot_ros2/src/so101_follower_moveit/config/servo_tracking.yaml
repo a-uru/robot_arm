@@ -1,0 +1,18 @@
+# MoveIt Servo の位置追従設定。変更後は servo.launch.py を再起動してください。
+# オフセットは tip_frame のローカル座標系。単位は m。
+# 実際の指先寸法・方向に合わせて変更してください。
+tip_frame: gripper_link
+tip_offset_x: 0.0
+tip_offset_y: 0.0
+tip_offset_z: 0.0
+
+# 手先の最高要求速度 [m/s]
+max_linear_speed: 0.08
+# 関節の最高要求速度 [rad/s]
+max_joint_speed: 0.8
+# 通常追従時の関節加速度上限 [rad/s²]
+max_joint_acceleration: 1.0
+# 位置誤差に対する応答ゲイン [1/s]
+gain: 4.0
+# 目標更新が途絶えた場合の停止判定 [s]
+target_timeout: 0.3

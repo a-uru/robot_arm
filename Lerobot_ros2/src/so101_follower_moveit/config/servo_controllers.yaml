@@ -1,0 +1,56 @@
+# Streaming Servo trajectories may end with a non-zero velocity.
+controller_manager:
+  ros__parameters:
+    update_rate: 50
+    arm_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+    gripper_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+arm_controller:
+  ros__parameters:
+    joints:
+    - shoulder_pan
+    - shoulder_lift
+    - elbow_flex
+    - wrist_flex
+    - wrist_roll
+    command_interfaces:
+    - position
+    state_interfaces:
+    - position
+    allow_partial_joints_goal: false
+    constraints:
+      goal_time: 2.0
+      shoulder_pan:
+        trajectory: 0.2
+        goal: 0.05
+      shoulder_lift:
+        trajectory: 0.2
+        goal: 0.05
+      elbow_flex:
+        trajectory: 0.2
+        goal: 0.05
+      wrist_flex:
+        trajectory: 0.2
+        goal: 0.05
+      wrist_roll:
+        trajectory: 0.2
+        goal: 0.05
+    allow_nonzero_velocity_at_trajectory_end: true
+    interpolate_from_desired_state: true
+gripper_controller:
+  ros__parameters:
+    joints:
+    - gripper
+    command_interfaces:
+    - position
+    state_interfaces:
+    - position
+    allow_partial_joints_goal: false
+    constraints:
+      goal_time: 2.0
+      gripper:
+        trajectory: 0.2
+        goal: 0.05

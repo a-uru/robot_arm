@@ -33,6 +33,9 @@
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
   <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>so101_servo</exec_depend>
+  <exec_depend>moveit_servo</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
   <exec_depend>so101_hw_interface</exec_depend>
   <exec_depend>joint_state_topic_hardware_interface</exec_depend>
   <exec_depend>joint_trajectory_controller</exec_depend>

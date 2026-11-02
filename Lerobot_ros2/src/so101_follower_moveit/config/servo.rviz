@@ -1,0 +1,36 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+Visualization Manager:
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Grid
+      Value: true
+    - Class: rviz_default_plugins/RobotModel
+      Name: RobotModel
+      Description Source: Topic
+      Description Topic:
+        Value: /robot_description
+      Value: true
+    - Class: rviz_default_plugins/InteractiveMarkers
+      Name: Servo Target
+      Interactive Markers Namespace: /so101_servo/target_marker
+      Show Axes: false
+      Show Descriptions: true
+      Value: true
+    - Class: rviz_default_plugins/Marker
+      Name: Actual Control Point
+      Marker Topic:
+        Value: /so101_servo/control_point
+      Value: true
+  Global Options:
+    Fixed Frame: base_link
+  Tools:
+    - Class: rviz_default_plugins/Interact
+    - Class: rviz_default_plugins/MoveCamera
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 0.8
+      Pitch: 0.5
+      Yaw: 0.8
