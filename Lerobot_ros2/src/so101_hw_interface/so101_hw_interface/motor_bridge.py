@@ -21,6 +21,8 @@ from ament_index_python.packages import get_package_share_directory
 
 from so101_hw_interface.motors.feetech.feetech import FeetechMotorsBus
 from so101_hw_interface.motors import Motor, MotorNormMode
+from so101_hw_interface.motor_diagnostics import MotorDiagnostics
+from so101_hw_interface.gain_tuning import GainTuning
 
 PORT_DEFAULT = "/dev/ttyACM0"
 
@@ -103,6 +105,8 @@ class MotorBridge(Node):
         # Flag to ensure we only command the initial middle position once
         self._initial_move_done = False
         self._commands_initialized = False
+        self.diagnostics = MotorDiagnostics(self, self.bus, JOINTS)
+        self.gain_tuning = GainTuning(self, self.bus)
 
     # ---------------------------------------------------------------------
     # Callbacks

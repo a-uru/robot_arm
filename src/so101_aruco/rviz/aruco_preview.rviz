@@ -1,0 +1,61 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+  - Class: rviz_common/Views
+    Name: Views
+Visualization Manager:
+  Class: ""
+  Global Options:
+    Fixed Frame: world
+    Background Color: 40; 40; 40
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Grid
+      Enabled: true
+      Cell Size: 0.1
+      Reference Frame: base_link
+    - Class: rviz_default_plugins/RobotModel
+      Name: SO-101
+      Enabled: true
+      Description Source: Topic
+      Description Topic:
+        Value: /robot_description
+        Durability Policy: Transient Local
+        Reliability Policy: Reliable
+      Visual Enabled: true
+      Collision Enabled: false
+      Alpha: 0.65
+    - Class: rviz_default_plugins/TF
+      Name: TF origins
+      Enabled: true
+      Show Names: true
+      Show Axes: true
+      Show Arrows: true
+      Marker Scale: 0.2
+      Frame Timeout: 5
+    - Class: rviz_default_plugins/Marker
+      Name: Object 20mm
+      Enabled: true
+      Topic:
+        Value: /aruco/object_marker
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+  Tools:
+    - Class: rviz_default_plugins/Interact
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+    - Class: rviz_default_plugins/FocusCamera
+    - Class: rviz_default_plugins/Measure
+  Current Tool: rviz_default_plugins/MoveCamera
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Name: Orbit
+      Target Frame: world
+      Distance: 0.8
+      Focal Point:
+        X: 0
+        Y: 0
+        Z: 0.1
+      Pitch: 0.4
+      Yaw: 0.6

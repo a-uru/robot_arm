@@ -1,0 +1,4 @@
+aruco_preview:
+  ros__parameters:
+    # /aruco/object/pose（base_link基準）の原点を中心に表示する立方体の一辺。
+    object_size_m: 0.02

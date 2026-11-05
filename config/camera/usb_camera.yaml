@@ -1,0 +1,7 @@
+usb_camera:
+  ros__parameters:
+    camera_frame_id: camera_optical_frame
+    image_size: [640, 480]
+    pixel_format: YUYV
+    output_encoding: rgb8
+    image_raw.enable_pub_plugins: ["image_transport/raw"]

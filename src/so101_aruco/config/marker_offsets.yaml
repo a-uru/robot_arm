@@ -1,0 +1,36 @@
+aruco_detector:
+  ros__parameters:
+    # 再投影誤差が近い姿勢候補は直前の姿勢に近い方を選ぶ（平滑化ではない）。
+    # 四隅のサブピクセル補正と、選択した姿勢の再投影誤差最小化。
+    corner_refinement_window: 5
+    corner_refinement_iterations: 50
+    corner_refinement_accuracy: 0.001
+    pose_refine_lm: true
+    pose_ambiguity_px: 0.3
+    pose_history_timeout_s: 0.5
+    reference_id: 0
+    object_id: 1
+    base_prediction_frame: base_link_predict
+    base_frame: base_link
+    camera_link_frame: camera_link
+    object_frame: aruco_object_origin
+
+    # 現在の取付オフセットを使ってbase_link基準の座標変換を有効化。
+    # 数値の実測精度を保証するフラグではない。取付位置・姿勢は引き続き要確認。
+    base_offset_calibrated: true
+    # trueなら校正確認後にbase_link -> camera_link -> camera光学座標を配信。
+    # カメラに既存のTF親がある場合はfalseにして多重配信を避ける。
+    publish_camera_tf: true
+
+    # ^base T_marker0: base_linkから見たID0マーカー中心の位置・姿勢。
+    # xyzはbase_linkの軸で表す。単位m。ゼロは未測定の仮値。
+    # rpyはmarker0の軸をbase_linkへ回す回転。単位deg。
+    # R = Rz(yaw) @ Ry(pitch) @ Rx(roll)。単なる符号反転で逆変換しない。
+    base_to_reference.xyz_m: [0.0, 0.025, 0.085]
+    base_to_reference.rpy_deg: [90.0, 0.0, -90.0]
+
+    # ^marker1 T_object: ID1から見た、使いたい物体原点の位置・姿勢。
+    # xyzはID1マーカーの軸で表す。単位m。
+    # 例: マーカー面から物体内部へ10mmならz=-0.010（実際に確認する）。
+    marker_to_object.xyz_m: [0.0, -0.01, -0.02]
+    marker_to_object.rpy_deg: [0.0, 0.0, 0.0]

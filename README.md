@@ -17,6 +17,7 @@
 - [遠隔操作の手順](#遠隔操作の手順)
 - [MoveIt 2 による操作](#moveit-2-による操作)
 - [MoveIt Servo による位置追従](docs/so101_servo.md)
+- [ArUcoからEnterで自動ピッキング](#arucoからenterで自動ピッキング)
 - [カメラの設定](#カメラの設定)
 - [トラブルシューティング](#トラブルシューティング)
 - [今回の修正と確認内容](#今回の修正と確認内容)
@@ -185,7 +186,56 @@ ros2 topic echo /joint_states --once
 
 模擬モードでは、アーム・グリッパー両方で MoveIt による計画、軌道実行、関節位置の到達を確認しました。実機用のトピック接続についても、模擬フィードバックで現在位置の保持と計画・実行を確認しました。シリアル接続した実機での軌道実行は未確認です。
 
+## ArUcoからEnterで自動ピッキング
+
+カメラ・ArUco・MoveIt・コントローラー・RVizをまとめて起動できます。両マーカーから新しく安定した物体位置が得られているときに、起動ターミナルでEnterを押すと、全工程を事前計画し、各工程の直前に実測関節角から再計画して把持・搬送・解放します。
+
+搬送先・グリッパー開閉角・指先位置は [pick_place.yaml](src/so101_pick_place/config/pick_place.yaml) で設定します。未確定のため現在は `configuration_ready: false` です。設定後にtrueへ変更し、実機では指先オフセットを実測して `tcp_offset_confirmed: true` にしてください。
+
+既存のカメラ・ArUcoプレビュー・MoveIt・モーターブリッジを停止し、最初にビルドします。
+
+```bash
+cd ~/robot_arm
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+colcon build --packages-select so101_pick_place --symlink-install --build-base build/pick_place
+source install/setup.bash
+export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+```
+
+模擬アーム（実カメラは起動）：
+
+```bash
+ros2 launch so101_pick_place pick_place.launch.py
+```
+
+実機：
+
+```bash
+ros2 launch so101_pick_place pick_place.launch.py use_fake_hardware:=false port:=/dev/ttyACM0
+```
+
+起動しただけでは把持を開始しません。**EnterはRVizではなくlaunchターミナルで押します。** 指先の位置のみを対象とする5軸の動作で、任意の把持姿勢や把持成功の検出は未対応です。[設定・動作順序・中断・検証結果](docs/so101_pick_place.md)を参照してください。
+
 ## カメラの設定
+
+ArUcoマーカーの認識とカメラに対する3D位置・姿勢の取得は、[ArUco検出のセットアップ・校正・実行手順](docs/aruco_detection.md)を参照してください。
+
+### 現在の固定構成・進捗
+
+| 項目 | 現在の設定 |
+| --- | --- |
+| カメラ | USB接続 XWF-1080p6 |
+| 画像 | 640×480、rgb8、`/image_raw` |
+| ドライバ | ソース版 `v4l2_camera 0.6.2`（`install/camera`） |
+| 通信 | Fast DDS（`rmw_fastrtps_cpp`）、カメラ側SHM 64 MiB |
+| 校正ファイル | [config/camera/ost.yaml](config/camera/ost.yaml) |
+| 校正ボード | 内側の交点10×7（マス11×8）、一辺24 mm |
+| 校正モデル | `plumb_bob`、640×480 |
+
+2026年11月6日に、47サンプルによる内部校正とファイル保存を完了し、上記YAMLを指定してカメラを再起動しました。DDS共有メモリ容量の増量後、ユーザー側で映像遅延の解消を確認済みです。ArUcoの実画像での3D位置・姿勢の取得と精度検証は、次の確認項目です。
+
+以下はこの構成を継続して使う手順です。カメラ・解像度・フォーカス条件を変えない限り、毎回の校正作業は不要です。
 
 ### 接続されているカメラの確認
 
@@ -198,47 +248,86 @@ v4l2-ctl --list-devices
 - 内蔵カメラ：`/dev/video0`、`/dev/video1`
 - 外付けカメラ XWF-1080p6：`/dev/video2`、`/dev/video3`
 
-### カメラノードの起動
+### USBカメラの起動
 
-外付けカメラ XWF-1080p6 の場合：
-
-```bash
-cd ~/robot_arm
-source install/setup.bash
-ros2 run v4l2_camera v4l2_camera_node --ros-args -p video_device:=/dev/video2
-```
-
-内蔵カメラの場合：
+外付けXWF-1080p6を接続し、ターミナル1で実行します。
 
 ```bash
 cd ~/robot_arm
-source install/setup.bash
-ros2 run v4l2_camera v4l2_camera_node --ros-args -p video_device:=/dev/video0
+./scripts/start_usb_camera.sh -p camera_info_url:=file:///home/akira/robot_arm/config/camera/ost.yaml
 ```
+
+このターミナルは開いたままにします。640×480・rgb8で `/image_raw` を、保存した内部校正情報を `/camera_info` に配信します。**通常起動でも上記の `camera_info_url` を必ず指定します。**スクリプトはカメラ固有のデバイスパスを使うため、USB再接続で `/dev/videoN` の番号が変わっても対応します。
+
+起動時にソース版ドライバの `install/camera/local_setup.bash` と、Fast DDSの共有メモリを64 MiBにする [設定](config/camera/fastdds_camera.xml) を自動で読み込みます。2026年11月6日、この構成でユーザー側でも遅延の解消を確認しました。直接 `ros2 run v4l2_camera ...` を実行するとこの設定を読み込まないため、通常は上記スクリプトを使用してください。Zenohルーターは不要です。
+
+初回のビルドや再ビルドは、[カメラドライバのビルド手順](docs/usb_camera_source.md)を参照してください。
 
 ### 映像の表示
 
-#### rqt_image_view を使う場合
+ターミナル2で標準ビューアを起動します。
 
 ```bash
-cd ~/robot_arm
-source install/setup.bash
-ros2 run rqt_image_view rqt_image_view
+source /opt/ros/jazzy/setup.bash
+export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+unset FASTDDS_BUILTIN_TRANSPORTS FASTRTPS_DEFAULT_PROFILES_FILE FASTDDS_DEFAULT_PROFILES_FILE
+ros2 run rqt_image_view rqt_image_view /image_raw
 ```
 
-左上の選択欄で `/image_raw` を選びます。
+一覧から選択する場合も `/image_raw` を指定します。`ROS_DOMAIN_ID` を独自に設定している場合は、カメラ側とビューア側で同じ値にしてください。ROS CLIのトピック一覧が古い場合は、通信設定を揃えてから `ros2 daemon stop` を実行します。
 
-#### RViz を使う場合
+RVizで表示する場合は、起動中のRVizで「Add」→「Image」を追加し、「Image Topic」を `/image_raw` にします。
 
-1. 左下の「Add」をクリックします。
-2. 「By display type」から「Image」を選びます。
-3. 「Image Topic」に `/image_raw` を指定します。
+### 停止・再起動
+
+カメラはターミナル1で `Ctrl+C`、ビューアはウィンドウを閉じるかターミナル2で `Ctrl+C` で停止します。カメラを再起動する場合は、既存ノードを止めてから起動スクリプトを再実行してください。USBを抜き差しした場合もカメラノードを再起動します。
+
+### ArUco検出を併用する
+
+カメラを起動したまま、ターミナル3で実行します。カメラの二重起動を避けるため `start_camera:=false` を指定します。
+
+```bash
+source /opt/ros/jazzy/setup.bash
+source ~/robot_arm/install/setup.bash
+export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+unset FASTDDS_BUILTIN_TRANSPORTS FASTRTPS_DEFAULT_PROFILES_FILE FASTDDS_DEFAULT_PROFILES_FILE
+ros2 launch so101_aruco detect.launch.py start_camera:=false
+```
+
+ビューアで `/aruco/image` を選ぶと検出枠と座標軸を確認できます。既定の辞書は `DICT_4X4_50`、マーカーの黒枠の辺長は20 mmです。[A4印刷用PDF](docs/aruco_markers/DICT_4X4_50_20mm_A4.pdf) を「実際のサイズ／100%」で印刷し、黒枠が20 mmであることを定規で確認してください。「用紙に合わせる」は無効にします。印刷後の実測寸法と一致させてください。`marker_size:=0.02` で辺長（m）を指定できます。
+
+位置・姿勢の配信確認は、同じROS環境を設定した別ターミナルで行います。
+
+```bash
+ros2 topic echo /aruco/detected_ids
+ros2 topic echo /aruco/marker_0/pose
+```
+
+位置はカメラ光学座標系で単位m、姿勢はQuaternionです。`base_link` への変換や自動ピッキングはまだ接続していません。マーカー未検出時や校正情報が無効な場合、Poseは配信されません。起動時の警告を確認してください。
+
+画像の設定は [usb_camera.yaml](config/camera/usb_camera.yaml)、遅延の調査結果は [DDS比較測定](docs/camera_dds_analysis.md)、校正の再実施と詳細は [ArUco・校正手順](docs/aruco_detection.md) を参照してください。
+
+静止時の推定揺れについて、CRANE-X7の実装を参考に画像・CameraInfoの同期と反復姿勢最適化を追加しています。[同一画像での比較と残る誤差](docs/aruco_accuracy_comparison.md)を参照してください。
+
+### ID 0・ID 1の原点オフセット
+
+ID 0はアーム台座の基準、ID 1は物体として使用します。調整ファイルは [marker_offsets.yaml](src/so101_aruco/config/marker_offsets.yaml) です。ID 0の取付位置・姿勢を実測するまでは `base_offset_calibrated: false` のまま、RVizで `base_link_predict` を確認してください。測定方法・座標変換の向き・有効化手順は [原点オフセットの調整](docs/aruco_offsets.md) を参照してください。
+
+### SO-101・推定原点・物体の同時表示
+
+カメラは起動したまま、既存のArUcoノードと重複するRViz／robot_state_publisherを停止し、同じROS環境を設定したターミナルで実行します。
+
+```bash
+ros2 launch so101_aruco preview.launch.py offsets_file:=$HOME/robot_arm/src/so101_aruco/config/marker_offsets.yaml preview_file:=$HOME/robot_arm/src/so101_aruco/config/preview.yaml
+```
+
+SO-101モデルの `base_link`、ID 0からの `base_link_predict`、物体原点を中心とした一辺20 mmの立方体を表示します。Fixed Frameは **world**。`world → base_link` はURDFで固定し、`base_link → camera_link → camera_optical_frame` を同一画像のID 0・1の検出から更新します。カメラを移動してもロボット・静止物体をworld側に保つ構成です。カメラ基準のモデル仮配置は廃止しました。実機制御は行いません。[座標変換と表示手順](docs/aruco_offsets.md)を参照してください。
 
 ### 配信されるトピック
 
 | トピック | 内容 | メッセージ型 |
 | --- | --- | --- |
-| `/image_raw` | カメラ画像（従来の設定では解像度 640×480、形式 rgb8） | `sensor_msgs/msg/Image` |
+| `/image_raw` | カメラ画像（640×480、rgb8） | `sensor_msgs/msg/Image` |
 | `/camera_info` | カメラのキャリブレーション情報 | `sensor_msgs/msg/CameraInfo` |
 
 ## トラブルシューティング
@@ -323,3 +412,17 @@ RVizで目標をドラッグする場合は、Servo起動時に `interactive_tar
 Servoの制御点を指先へ移す場合は `tip_offset_x/y/z`（tip_frameのローカル座標、単位m）を指定してください。速度は `max_linear_speed`、`max_joint_speed`、`max_joint_acceleration`、`gain` で調整できます。[設定例](docs/so101_servo.md#指先の位置を手動オフセットで指定する)を参照してください。
 
 Servoの指先オフセット・最高速度などは [servo_tracking.yaml](Lerobot_ros2/src/so101_follower_moveit/config/servo_tracking.yaml) にまとめています。このファイルを編集してからServoを再起動してください。
+
+### USBカメラが遅い・No such deviceが続く場合
+
+`No such device (19)` はキャプチャ中のデバイス消失を示します。2026年11月6日の確認では、カーネルにUSB切断・再接続が記録され、外付けカメラは `/dev/video2` から `/dev/video3` に変わっていました。固有パスを使う起動スクリプトを `Ctrl+C` で停止してから再起動してください。切断前に開いていたデバイスには、そのままでは復帰できません。
+
+構成はUSBカメラ → `v4l2_camera_node` → `/image_raw` → 標準ビューアです。JPEG配信・独自ビューアは使用しません。DDS共有メモリの容量不足を切り分け、カメラ側のセグメントを64 MiBへ増やしています。[DDSの比較測定](docs/camera_dds_analysis.md)を参照してください。切断が再発する場合はUSBポート・ケーブルを確認してください。
+
+以前の診断設定をシェルに設定していた場合は、ビューアやArUcoを起動する前に解除してください。
+
+```bash
+unset FASTDDS_BUILTIN_TRANSPORTS FASTRTPS_DEFAULT_PROFILES_FILE FASTDDS_DEFAULT_PROFILES_FILE
+export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+ros2 daemon stop
+```
