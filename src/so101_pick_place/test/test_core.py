@@ -4,7 +4,7 @@ from so101_pick_place.core import stages, stable_snapshot, validate_stages, gras
 
 
 def config():
-    return {'gripper_open_rad': .6, 'gripper_closed_rad': 0., 'approach_height_m': .04,
+    return {'wait_xyz_m': [0, -.2, .2], 'transport_clearance_z_m': .15, 'gripper_open_rad': .6, 'gripper_closed_rad': 0., 'approach_height_m': .04,
             'lift_height_m': .06, 'place_approach_height_m': .06, 'retreat_height_m': .06,
             'target_timeout_s': .35, 'stable_window_s': .5, 'stable_min_samples': 5,
             'grasp_offset_object_m': [0, 0, 0], 'stable_position_std_m': .004,
@@ -13,10 +13,14 @@ def config():
 
 def test_sequence_and_attached_state():
     result = stages([.15, .1, .05], [.15, -.1, .08], config())
-    assert [s.name for s in result] == ['open','approach','grasp','close','lift','transfer','place','release','retreat']
-    assert [s.name for s in result if s.carrying] == ['lift','transfer','place','release']
+    assert [s.name for s in result] == ['open','approach','grasp','close','clearance','place','release','wait']
+    assert [s.name for s in result if s.carrying] == ['clearance','place','release']
     np.testing.assert_allclose(result[1].xyz, [.15, .1, .09])
-    assert result[7].gripper == .6
+    np.testing.assert_allclose(result[4].xyz, [.15, .1, .15])
+    np.testing.assert_allclose(result[5].xyz, [.15, -.1, .08])
+    assert result[6].gripper == .6
+    np.testing.assert_allclose(result[7].xyz, [0., -.2, .2])
+    assert not result[7].carrying
 
 
 def test_rotated_grasp_offset():

@@ -66,3 +66,27 @@ def choose_pose(candidates, previous_rotation=None, ambiguity_px=0.3):
         matrix, _ = cv2.Rodrigues(item[0])
         return np.arccos(np.clip((np.trace(previous_matrix.T @ matrix) - 1) / 2, -1, 1))
     return min(plausible, key=angle)
+
+
+class CornerHistory:
+    """Short image-space median; reset on motion/gaps, never fill missing detections."""
+    def __init__(self, window=5, motion_px=1.5, timeout_s=0.2):
+        from collections import deque
+        self.deque = deque
+        self.window, self.motion_px, self.timeout_s = window, motion_px, timeout_s
+        self.history = {}
+
+    def update(self, marker_id, corners, stamp_s):
+        points = np.asarray(corners, dtype=np.float32).reshape(4, 2)
+        old = self.history.get(marker_id)
+        reset = old is None
+        if old is not None:
+            last_stamp, queue = old
+            reset = (stamp_s <= last_stamp or stamp_s-last_stamp > self.timeout_s or
+                     np.max(np.linalg.norm(points-queue[-1], axis=1)) > self.motion_px or
+                     np.max(np.linalg.norm(points-queue[0], axis=1)) > self.motion_px)
+        if reset:
+            queue = self.deque(maxlen=self.window)
+        queue.append(points.copy())
+        self.history[marker_id] = (stamp_s, queue)
+        return np.median(np.stack(queue), axis=0).astype(np.float32).reshape(np.asarray(corners).shape)

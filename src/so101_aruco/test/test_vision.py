@@ -47,3 +47,27 @@ def test_lm_refinement_reduces_error_on_noisy_corners():
     refined = estimate(corners, .02, k, np.zeros(5), refine=True)
     assert refined[2] <= raw[2]
     assert refined[1][2, 0] > 0
+
+
+def test_corner_history_rejects_single_frame_noise_and_resets_on_motion():
+    from so101_aruco.vision import CornerHistory
+    filter = CornerHistory(window=5, motion_px=1.5, timeout_s=.2)
+    c = np.array([[[10., 10.], [40., 10.], [40., 40.], [10., 40.]]], dtype=np.float32)
+    filter.update(0, c, 0.)
+    filter.update(0, c, .03)
+    assert np.allclose(filter.update(0, c+.5, .06), c)
+    assert np.allclose(filter.update(0, c+4, .09), c+4)
+    # Each marker has independent history.
+    assert np.allclose(filter.update(1, c+8, .09), c+8)
+    # Gaps and backwards timestamps must not replay old points.
+    assert np.allclose(filter.update(0, c, .5), c)
+    assert np.allclose(filter.update(0, c+.7, .4), c+.7)
+
+
+def test_corner_history_slow_motion_does_not_accumulate_unbounded_lag():
+    from so101_aruco.vision import CornerHistory
+    filter = CornerHistory(window=5, motion_px=1.5)
+    c = np.zeros((1, 4, 2), dtype=np.float32)
+    for index in range(10):
+        result = filter.update(0, c+index*.6, index*.03)
+        assert np.max(np.abs(result-(c+index*.6))) <= 1.5

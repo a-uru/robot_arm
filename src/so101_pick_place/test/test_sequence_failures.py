@@ -6,7 +6,7 @@ from so101_pick_place.core import stages
 
 
 def params():
-    return {'gripper_open_rad': .6, 'gripper_closed_rad': 0., 'approach_height_m': .04,
+    return {'wait_xyz_m': [0, -.2, .2], 'transport_clearance_z_m': .15, 'gripper_open_rad': .6, 'gripper_closed_rad': 0., 'approach_height_m': .04,
             'lift_height_m': .06, 'place_approach_height_m': .06, 'retreat_height_m': .06,
             'target_timeout_s': .35, 'max_target_shift_before_grasp_m': .015,
             'grasp_offset_object_m': [0, 0, 0], 'start_joint_tolerance_rad': .06,
@@ -24,6 +24,7 @@ def fake_node():
     node.verify=lambda stage: events.append('verify:'+stage.name)
     node.get_logger=lambda: SimpleNamespace(warning=events.append)
     node.action=lambda *a: events.append('action')
+    node.execute_arm = lambda trajectory, precise=True: PickPlace.execute_arm(node, trajectory, precise)
     return node,events
 
 
@@ -90,7 +91,7 @@ def test_runtime_replan_failure_stops_before_close():
 
     def plan(stage, positions):
         calls.append(stage.name)
-        if len(calls) > 9 and stage.name == 'close':
+        if len(calls) > 8 and stage.name == 'close':
             raise RuntimeError('runtime replan failed')
         return trajectory()
 
@@ -111,8 +112,8 @@ def test_arm_execution_keeps_grasp_strict_and_transit_relaxed():
     goals = []
     node.action = lambda client, goal: goals.append((client, goal))
     PickPlace.cycle(node, np.array([.2, 0, .1]), stages([.2, 0, .1], [.15, -.1, .08], node.p))
-    assert len(goals) == 9
-    for index in (1, 4, 5, 6, 8):
+    assert len(goals) == 8
+    for index in (1, 4, 5, 7):
         client, goal = goals[index]
         assert client is node.arm_execute
         assert isinstance(goal, FollowJointTrajectory.Goal)
@@ -122,7 +123,7 @@ def test_arm_execution_keeps_grasp_strict_and_transit_relaxed():
     assert client is node.arm_execute
     assert isinstance(goal, FollowJointTrajectory.Goal)
     assert goal.goal_tolerance[0].position == .05
-    for index in (0, 3, 7):
+    for index in (0, 3, 6):
         client, goal = goals[index]
         assert client is node.execute
         assert isinstance(goal, ExecuteTrajectory.Goal)
@@ -138,13 +139,16 @@ def test_controller_error_is_not_accepted_as_transit_success():
         node = SimpleNamespace(p={'action_timeout_s': 10.}, active_goal=None,
                                stop_requested=threading.Event())
         result = SimpleNamespace(error_code=code)
+        from rclpy.task import Future
         response = SimpleNamespace(status=GoalStatus.STATUS_SUCCEEDED, result=result)
+        terminal = Future()
+        terminal.set_result(response)
         handle = Mock(accepted=True)
-        handle.get_result_async.return_value = response
+        handle.get_result_async.return_value = terminal
         future = Mock()
         client = Mock()
         client.send_goal_async.return_value = future
-        node.wait_future = lambda item, timeout: handle if item is future else item
+        node.wait_future = lambda item, timeout: handle if item is future else item.result()
         if code == 0:
             assert PickPlace.action(node, client, FollowJointTrajectory.Goal()) is result
         else:
@@ -172,3 +176,19 @@ def test_release_removes_world_copy_after_detach():
     assert removed.id == 'so101_pick_payload'
     assert removed.operation == CollisionObject.REMOVE
     assert not requests[1].scene.robot_state.attached_collision_objects
+
+
+def test_space_interrupt_runs_return_after_cycle_unwinds():
+    node, events = fake_node()
+    node.return_requested = threading.Event()
+    node.plan = lambda *args: trajectory()
+    def interrupted(*args):
+        node.return_requested.set()
+        node.stop_requested.set()
+        raise RuntimeError('Cancelled')
+    node.action = interrupted
+    node.recover_return = lambda: events.append('recover_after_cancel')
+    PickPlace.cycle(node, np.array([.2, 0, .1]), stages([.2, 0, .1], [.15, -.1, .08], node.p))
+    assert events[-1] == 'recover_after_cancel'
+    assert any(e.startswith('ABORTED: Cancelled') for e in events)
+    assert not node.busy and not node.return_requested.is_set()

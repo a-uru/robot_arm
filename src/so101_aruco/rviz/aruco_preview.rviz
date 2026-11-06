@@ -1,61 +1,249 @@
 Panels:
   - Class: rviz_common/Displays
+    Help Height: 70
     Name: Displays
+    Property Tree Widget:
+      Expanded: ~
+      Splitter Ratio: 0.5
+    Tree Height: 70
   - Class: rviz_common/Views
+    Expanded:
+      - /Current View1
     Name: Views
+    Splitter Ratio: 0.5
 Visualization Manager:
   Class: ""
-  Global Options:
-    Fixed Frame: world
-    Background Color: 40; 40; 40
   Displays:
-    - Class: rviz_default_plugins/Grid
+    - Alpha: 0.5
+      Cell Size: 0.10000000149011612
+      Class: rviz_default_plugins/Grid
+      Color: 160; 160; 164
+      Enabled: true
+      Line Style:
+        Line Width: 0.029999999329447746
+        Value: Lines
       Name: Grid
-      Enabled: true
-      Cell Size: 0.1
+      Normal Cell Count: 0
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Plane: XY
+      Plane Cell Count: 10
       Reference Frame: base_link
-    - Class: rviz_default_plugins/RobotModel
-      Name: SO-101
-      Enabled: true
+      Value: true
+    - Alpha: 0.6499999761581421
+      Class: rviz_default_plugins/RobotModel
+      Collision Enabled: false
+      Description File: ""
       Description Source: Topic
       Description Topic:
-        Value: /robot_description
+        Depth: 5
         Durability Policy: Transient Local
+        History Policy: Keep Last
         Reliability Policy: Reliable
+        Value: /robot_description
+      Enabled: true
+      Links:
+        All Links Enabled: true
+        Expand Joint Details: false
+        Expand Link Details: false
+        Expand Tree: false
+        Link Tree Style: Links in Alphabetic Order
+        base_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        gripper_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        jaw_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        lower_arm_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        shoulder_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        upper_arm_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        world:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        wrist_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+      Mass Properties:
+        Inertia: false
+        Mass: false
+      Name: SO-101
+      TF Prefix: ""
+      Update Interval: 0
+      Value: true
       Visual Enabled: true
-      Collision Enabled: false
-      Alpha: 0.65
     - Class: rviz_default_plugins/TF
-      Name: TF origins
       Enabled: true
-      Show Names: true
-      Show Axes: true
-      Show Arrows: true
-      Marker Scale: 0.2
+      Filter (blacklist): ""
+      Filter (whitelist): ""
       Frame Timeout: 5
+      Frames:
+        All Enabled: true
+        aruco_marker_0:
+          Value: true
+        aruco_marker_1:
+          Value: true
+        aruco_marker_17:
+          Value: true
+        aruco_object_origin:
+          Value: true
+        base_link:
+          Value: true
+        base_link_predict:
+          Value: true
+        camera_link:
+          Value: true
+        camera_optical_frame:
+          Value: true
+        gripper_link:
+          Value: true
+        jaw_link:
+          Value: true
+        lower_arm_link:
+          Value: true
+        shoulder_link:
+          Value: true
+        tcp_link:
+          Value: true
+        upper_arm_link:
+          Value: true
+        world:
+          Value: true
+        wrist_link:
+          Value: true
+      Marker Scale: 0.20000000298023224
+      Name: TF origins
+      Show Arrows: true
+      Show Axes: true
+      Show Names: true
+      Tree:
+        world:
+          base_link:
+            camera_link:
+              camera_optical_frame:
+                aruco_marker_0:
+                  base_link_predict:
+                    {}
+                aruco_marker_1:
+                  aruco_object_origin:
+                    {}
+                aruco_marker_17:
+                  {}
+            shoulder_link:
+              upper_arm_link:
+                lower_arm_link:
+                  wrist_link:
+                    gripper_link:
+                      jaw_link:
+                        {}
+                      tcp_link:
+                        {}
+      Update Interval: 0
+      Value: true
     - Class: rviz_default_plugins/Marker
-      Name: Object 20mm
       Enabled: true
+      Name: Object 20mm
+      Namespaces:
+        aruco_object: true
       Topic:
-        Value: /aruco/object_marker
-        Reliability Policy: Reliable
+        Depth: 5
         Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /aruco/object_marker
+      Value: true
+    - Class: rviz_default_plugins/Image
+      Enabled: true
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: Image
+      Normalize Range: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /aruco/image
+      Value: true
+  Enabled: true
+  Global Options:
+    Background Color: 40; 40; 40
+    Fixed Frame: world
+    Frame Rate: 30
+  Name: root
   Tools:
     - Class: rviz_default_plugins/Interact
+      Hide Inactive Objects: true
     - Class: rviz_default_plugins/MoveCamera
     - Class: rviz_default_plugins/Select
     - Class: rviz_default_plugins/FocusCamera
     - Class: rviz_default_plugins/Measure
-  Current Tool: rviz_default_plugins/MoveCamera
+      Line color: 128; 128; 0
+  Transformation:
+    Current:
+      Class: rviz_default_plugins/TF
+  Value: true
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Name: Orbit
-      Target Frame: world
-      Distance: 0.8
+      Distance: 1.1410056352615356
+      Enable Stereo Rendering:
+        Stereo Eye Separation: 0.05999999865889549
+        Stereo Focal Distance: 1
+        Swap Stereo Eyes: false
+        Value: false
       Focal Point:
-        X: 0
-        Y: 0
-        Z: 0.1
-      Pitch: 0.4
-      Yaw: 0.6
+        X: -0.09238915890455246
+        Y: 0.05615859478712082
+        Z: 0.08672135323286057
+      Focal Shape Fixed Size: true
+      Focal Shape Size: 0.05000000074505806
+      Invert Z Axis: false
+      Name: Current View
+      Near Clip Distance: 0.009999999776482582
+      Pitch: 0.5900000333786011
+      Target Frame: world
+      Value: Orbit (rviz_default_plugins)
+      Yaw: 3.6699888706207275
+    Saved: ~
+Window Geometry:
+  Displays:
+    collapsed: false
+  Height: 699
+  Hide Left Dock: false
+  Hide Right Dock: false
+  Image:
+    collapsed: false
+  QMainWindow State: 000000ff00000000fd0000000100000000000002770000025dfc0200000003fb000000100044006900730070006c006100790073010000003f000000cc000000cc00fffffffb0000000a0056006900650077007300000001920000010a000000a900fffffffb0000000a0049006d00610067006501000001110000018b0000001700ffffff000002970000025d00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  Views:
+    collapsed: false
+  Width: 1300
+  X: 66
+  Y: 32

@@ -13,7 +13,7 @@ from std_msgs.msg import Int32MultiArray
 from tf2_ros import TransformBroadcaster, StaticTransformBroadcaster
 
 from .transforms import from_xyz_rpy, from_pose, base_object, camera_link_to_optical
-from .vision import detect, dictionary, estimate
+from .vision import detect, dictionary, estimate, CornerHistory
 
 
 class ArucoDetector(Node):
@@ -24,8 +24,10 @@ class ArucoDetector(Node):
                     'image_topic': '/image_raw', 'camera_info_topic': '/camera_info',
                     'max_reprojection_error': 3.0,
                     'pose_ambiguity_px': 0.3, 'pose_history_timeout_s': 0.5,
-                    'pose_refine_lm': True, 'corner_refinement_window': 5,
+                    'pose_refine_lm': True, 'corner_refinement_window': 3,
                     'corner_refinement_iterations': 50, 'corner_refinement_accuracy': 0.001,
+                    'corner_history_window': 5, 'corner_history_motion_px': 1.5,
+                    'corner_history_timeout_s': 0.2, 'min_marker_side_px': 16.0,
                     'base_prediction_frame': 'base_link_predict',
                     'reference_id': 0, 'object_id': 1, 'base_frame': 'base_link',
                     'object_frame': 'aruco_object_origin', 'base_offset_calibrated': False,
@@ -73,6 +75,13 @@ class ArucoDetector(Node):
         if self.ambiguity_px < 0 or self.history_timeout < 0:
             raise ValueError('Pose ambiguity and timeout must be nonnegative')
         self.pose_history = {}
+        window = int(value('corner_history_window'))
+        motion_px = float(value('corner_history_motion_px'))
+        timeout_s = float(value('corner_history_timeout_s'))
+        self.min_marker_side_px = float(value('min_marker_side_px'))
+        if window < 1 or window % 2 == 0 or motion_px <= 0 or timeout_s <= 0 or self.min_marker_side_px <= 0:
+            raise ValueError('Corner history window must be odd and positive; thresholds must be positive')
+        self.corner_history = CornerHistory(window, motion_px, timeout_s)
         self.bridge = CvBridge()
         self.info = None
         self.publishers_by_id = {}
@@ -124,6 +133,15 @@ class ArucoDetector(Node):
                 distortion = np.array(info.d, dtype=float)
                 for marker_corners, marker_id in zip(corners, ids.flatten()):
                     marker_id = int(marker_id)
+                    if marker_id not in (self.reference_id, self.object_id):
+                        continue
+                    raw = np.asarray(marker_corners).reshape(4, 2)
+                    min_side = float(np.min(np.linalg.norm(np.roll(raw, -1, axis=0)-raw, axis=1)))
+                    if min_side < self.min_marker_side_px:
+                        self.get_logger().warning(f'ID{marker_id}: marker too small ({min_side:.1f}px); no pose', throttle_duration_sec=5.0)
+                        continue
+                    stamp_s = msg.header.stamp.sec + msg.header.stamp.nanosec / 1e9
+                    marker_corners = self.corner_history.update(marker_id, marker_corners, stamp_s)
                     size = self.sizes.get(marker_id, self.size)
                     now = time.monotonic()
                     history = self.pose_history.get(marker_id)
@@ -156,7 +174,7 @@ class ArucoDetector(Node):
                     self.tf.sendTransform(transform)
                     cv2.drawFrameAxes(image, matrix, distortion, rotation, translation, size * 0.5)
                     x, y = np.asarray(marker_corners).reshape(4, 2)[0].astype(int)
-                    cv2.putText(image, f'{translation[2, 0]:.3f}m err={error:.2f}px',
+                    cv2.putText(image, f'{translation[2, 0]:.3f}m err={error:.2f}px side={min_side:.0f}px',
                                 (int(x), max(15, int(y)-10)), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 0), 1)
         self.publish_offsets(msg.header, poses)
         if reason:

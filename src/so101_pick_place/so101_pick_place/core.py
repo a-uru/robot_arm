@@ -26,15 +26,16 @@ def grasp_point(position, quaternion, offset):
 def stages(pick, place, p):
     pick = vector(pick, 'pick'); place = vector(place, 'place')
     z = np.array([0., 0., 1.])
+    clearance = pick.copy()
+    clearance[2] = max(pick[2], float(p['transport_clearance_z_m']))
     return [Stage('open', gripper=p['gripper_open_rad']),
             Stage('approach', pick + z * p['approach_height_m']),
             Stage('grasp', pick),
             Stage('close', gripper=p['gripper_closed_rad']),
-            Stage('lift', pick + z * p['lift_height_m'], carrying=True),
-            Stage('transfer', place + z * p['place_approach_height_m'], carrying=True),
+            Stage('clearance', clearance, carrying=True),
             Stage('place', place, carrying=True),
             Stage('release', gripper=p['gripper_open_rad'], carrying=True),
-            Stage('retreat', place + z * p['retreat_height_m'])]
+            Stage('wait', vector(p['wait_xyz_m'], 'wait_xyz_m'))]
 
 
 def validate_stages(sequence, lower, upper):

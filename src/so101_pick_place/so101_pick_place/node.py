@@ -3,6 +3,8 @@ import os
 import select
 import threading
 import time
+import termios
+import tty
 from collections import deque
 import xml.etree.ElementTree as ET
 
@@ -31,7 +33,7 @@ from std_srvs.srv import Trigger
 from tf2_ros import Buffer, TransformListener, StaticTransformBroadcaster
 from so101_servo.kinematics import Chain
 from .ik import tcp_candidates
-from .core import grasp_point, stable_snapshot, stages, validate_stages, vector
+from .core import Stage, grasp_point, stable_snapshot, stages, validate_stages, vector
 
 
 class PickPlace(Node):
@@ -80,6 +82,11 @@ class PickPlace(Node):
         self.busy = False
         self.active_goal = None
         self.stop_requested = threading.Event()
+        self.return_requested = threading.Event()
+        self.return_in_progress = False
+        self.cancel_unconfirmed = False
+        self.keyboard_stop = threading.Event()
+        self.keyboard_thread = None
         self.carrying = False
         self.motion_fault = False
         self.execution_started = False
@@ -88,6 +95,7 @@ class PickPlace(Node):
         self.create_subscription(JointState, '/joint_states', self.on_joints, qos_profile_sensor_data)
         self.create_service(Trigger, '/pick_place/trigger', self.on_trigger)
         self.create_service(Trigger, '/pick_place/cancel', self.on_cancel)
+        self.create_service(Trigger, '/pick_place/return_to_wait', self.on_return_to_wait)
         self.move_group = ActionClient(self, MoveGroup, '/move_action')
         self.execute = ActionClient(self, ExecuteTrajectory, '/execute_trajectory')
         self.arm_execute = ActionClient(self, FollowJointTrajectory, '/arm_controller/follow_joint_trajectory')
@@ -95,24 +103,27 @@ class PickPlace(Node):
         self.validity = self.create_client(GetStateValidity, '/check_state_validity')
         self.buffer = Buffer()
         self.listener = TransformListener(self.buffer, self)
-        self.set_status('IDLE: Enter to snapshot a fresh stable target and plan all stages')
+        self.set_status('IDLE: Enter to pick; Space to interrupt and return to wait')
         if not self.p['configuration_ready']:
             self.get_logger().warning('Set place_xyz_m, gripper angles and TCP in pick_place.yaml, then configuration_ready=true. Enter is disabled meanwhile.')
         self.worker = None
         if self.p['keyboard_enabled']:
-            threading.Thread(target=self.keyboard_loop, daemon=True).start()
+            self.keyboard_thread = threading.Thread(target=self.keyboard_loop, daemon=True)
+            self.keyboard_thread.start()
 
     def _validate(self):
-        for k in ('tcp_offset_m', 'grasp_offset_object_m', 'place_xyz_m', 'workspace_min_m', 'workspace_max_m', 'table_size_m'):
+        for k in ('tcp_offset_m', 'grasp_offset_object_m', 'place_xyz_m', 'wait_xyz_m', 'workspace_min_m', 'workspace_max_m', 'table_size_m'):
             vector(self.p[k], k)
         if len(self.p['table_center_xy_m']) != 2 or not np.isfinite(self.p['table_center_xy_m']).all():
             raise ValueError('table_center_xy_m must be finite XY')
-        for k in ('approach_height_m', 'lift_height_m', 'place_approach_height_m', 'retreat_height_m',
+        for k in ('approach_height_m', 'transport_clearance_z_m',
                   'position_tolerance_m', 'reached_tolerance_m', 'planning_time_s', 'action_timeout_s',
                   'target_timeout_s', 'stable_window_s', 'stable_position_std_m', 'stable_position_range_m',
                   'joint_state_timeout_s', 'max_target_shift_before_grasp_m', 'start_joint_tolerance_rad',
                   'gripper_reached_tolerance_rad', 'payload_radius_m',
-                  'transit_reached_tolerance_m', 'transit_joint_tolerance_rad', 'grasp_joint_tolerance_rad'):
+                  'transit_reached_tolerance_m', 'transit_joint_tolerance_rad', 'grasp_joint_tolerance_rad',
+                  'grasp_correction_step_m', 'grasp_correction_max_offset_m',
+                  'grasp_correction_max_joint_step_rad', 'grasp_correction_settle_s'):
             if not np.isfinite(self.p[k]) or self.p[k] <= 0:
                 raise ValueError(f'{k} must be finite and positive')
         if self.p['stable_min_samples'] < 2 or np.any(np.array(self.p['table_size_m']) <= 0):
@@ -122,13 +133,16 @@ class PickPlace(Node):
         for k in ('velocity_scaling', 'acceleration_scaling'):
             if not 0 < self.p[k] <= 1:
                 raise ValueError(f'{k} must be in (0, 1]')
+        if not 0 < self.p['grasp_correction_gain'] <= 1 or not 1 <= self.p['grasp_correction_attempts'] <= 5:
+            raise ValueError('Correction gain must be (0,1], attempts must be 1..5')
         lo, hi = self.limits['gripper']
         for k in ('gripper_open_rad', 'gripper_closed_rad'):
             if not np.isfinite(self.p[k]) or not lo <= self.p[k] <= hi:
                 raise ValueError(f'{k} must be within URDF bounds {lo}..{hi} rad')
         if abs(self.p['gripper_open_rad'] - self.p['gripper_closed_rad']) < .01:
             raise ValueError('Open and closed gripper angles must differ')
-        validate_stages(stages(self.p['place_xyz_m'], self.p['place_xyz_m'], self.p),
+        validate_stages([Stage('place', vector(self.p['place_xyz_m'], 'place_xyz_m')),
+                         Stage('wait', vector(self.p['wait_xyz_m'], 'wait_xyz_m'))],
                         self.p['workspace_min_m'], self.p['workspace_max_m'])
 
     def set_status(self, text):
@@ -168,15 +182,27 @@ class PickPlace(Node):
     def keyboard_loop(self):
         try:
             with open('/dev/tty', 'r') as terminal:
-                while rclpy.ok() and not self.stop_requested.is_set():
-                    if select.select([terminal], [], [], .2)[0]:
-                        line = terminal.readline()
-                        if line == '':
-                            return
-                        if not line.strip():
-                            accepted, message = self.trigger()
-                            if not accepted:
-                                self.get_logger().warning(message)
+                fd = terminal.fileno()
+                old = termios.tcgetattr(fd)
+                try:
+                    tty.setcbreak(fd)
+                    while rclpy.ok() and not self.keyboard_stop.is_set():
+                        if select.select([terminal], [], [], .2)[0]:
+                            key = os.read(fd, 1)
+                            if not key:
+                                return
+                            if key == b' ':
+                                accepted, message = self.request_return_to_wait()
+                                if accepted:
+                                    self.get_logger().info(message)
+                                else:
+                                    self.get_logger().warning(message)
+                            elif key in (b'\n', b'\r'):
+                                accepted, message = self.trigger()
+                                if not accepted:
+                                    self.get_logger().warning(message)
+                finally:
+                    termios.tcsetattr(fd, termios.TCSANOW, old)
         except OSError:
             self.get_logger().warning('No controlling terminal: use /pick_place/trigger service')
 
@@ -194,6 +220,8 @@ class PickPlace(Node):
                 return False, 'Measure TCP offset and set tcp_offset_confirmed=true for real hardware'
             if self.motion_fault:
                 return False, 'Execution fault/cancel latched; inspect robot state and restart'
+            if self.cancel_unconfirmed:
+                return False, 'Previous action termination unconfirmed; inspect controllers'
             if self.carrying:
                 return False, 'Payload may still be held after failure; resolve manually and restart'
             try:
@@ -213,9 +241,83 @@ class PickPlace(Node):
         return True, f'Target frozen: {target.tolist()}; planning all stages before motion'
 
     def on_cancel(self, request, response):
+        self.return_requested.clear()
         self.cancel()
         response.success, response.message = True, 'Cancellation requested; no automatic gripper release'
         return response
+
+    def on_return_to_wait(self, request, response):
+        response.success, response.message = self.request_return_to_wait()
+        return response
+
+    def request_return_to_wait(self):
+        with self.lock:
+            if self.return_in_progress:
+                self.cancel()
+                return False, 'Return cancelled; hold position'
+            if self.busy:
+                self.return_requested.set()
+                self.cancel()
+                return True, 'Cycle interrupted; return after action termination'
+            if not self.p['configuration_ready'] or (not self.fake and not self.p['tcp_offset_confirmed']):
+                return False, 'Configuration/TCP must be confirmed before return motion'
+            if self.cancel_unconfirmed:
+                return False, 'Action termination unconfirmed; no return motion'
+            self.busy = True
+            self.stop_requested.clear()
+            self.return_in_progress = True
+        self.worker = threading.Thread(target=self.idle_return, daemon=True)
+        self.worker.start()
+        return True, 'Returning to wait position'
+
+    def idle_return(self):
+        try:
+            self.recover_return()
+        finally:
+            with self.lock:
+                self.busy = False
+
+    def recover_return(self):
+        already_returning = self.return_in_progress
+        self.return_in_progress = True
+        self.return_requested.clear()
+        try:
+            if self.cancel_unconfirmed or not rclpy.ok():
+                raise RuntimeError('Action termination unconfirmed; return forbidden')
+            if already_returning and self.stop_requested.is_set():
+                raise RuntimeError('Return cancelled')
+            self.stop_requested.clear()
+            if self.carrying:
+                self.apply_scene(self.payload())
+            wait = Stage('wait', vector(self.p['wait_xyz_m'], 'wait_xyz_m'), carrying=self.carrying)
+            release = Stage('release', gripper=self.p['gripper_open_rad'], carrying=self.carrying)
+            positions = self.joint_snapshot()
+            self.set_status('RETURN: planning wait and release')
+            validate_stages([wait], self.p['workspace_min_m'], self.p['workspace_max_m'])
+            trajectory = self.plan(wait, positions)
+            self.plan(release, positions)
+            if self.stop_requested.is_set():
+                raise RuntimeError('Cancelled')
+            self.execute_arm(trajectory, precise=False)
+            self.verify(wait)
+            self.set_status('RETURN: reached wait; opening gripper')
+            trajectory = self.plan(release, self.joint_snapshot())
+            goal = ExecuteTrajectory.Goal()
+            goal.trajectory = trajectory
+            goal.controller_names = ['gripper_controller']
+            if trajectory.joint_trajectory.points:
+                self.action(self.execute, goal)
+            self.verify(release)
+            if self.carrying:
+                self.apply_scene(self.payload(remove=True))
+            self.carrying = False
+            self.motion_fault = False
+            self.set_status('IDLE: at wait position; Enter starts next cycle')
+        except Exception as exc:
+            self.motion_fault = True
+            self.set_status(f'RETURN FAILED: {exc}; no automatic release after failure')
+        finally:
+            self.return_in_progress = False
 
     def cancel(self):
         self.stop_requested.set()
@@ -237,8 +339,12 @@ class PickPlace(Node):
         return future.result()
 
     def action(self, client, goal):
+        if self.stop_requested.is_set():
+            raise RuntimeError('Cancelled')
         if not client.wait_for_server(timeout_sec=5):
             raise RuntimeError('MoveIt action server unavailable')
+        if self.stop_requested.is_set():
+            raise RuntimeError('Cancelled')
         # If acceptance arrives after a timeout/cancel, cancel the late goal as well.
         future = client.send_goal_async(goal)
         def late_cancel(f):
@@ -261,8 +367,28 @@ class PickPlace(Node):
             return response.result
         except Exception:
             self.stop_requested.set()
+            if handle is None and future.done():
+                try:
+                    handle = future.result()
+                except Exception:
+                    self.cancel_unconfirmed = True
             if handle is not None and handle.accepted:
                 handle.cancel_goal_async()
+                terminal = handle.get_result_async()
+                ended = threading.Event()
+                terminal.add_done_callback(lambda _: ended.set())
+                if terminal.done():
+                    ended.set()
+                if not ended.wait(5.):
+                    self.cancel_unconfirmed = True
+                else:
+                    try:
+                        if terminal.result().status not in (GoalStatus.STATUS_SUCCEEDED, GoalStatus.STATUS_CANCELED, GoalStatus.STATUS_ABORTED):
+                            self.cancel_unconfirmed = True
+                    except Exception:
+                        self.cancel_unconfirmed = True
+            elif handle is None:
+                self.cancel_unconfirmed = True
             raise
         finally:
             self.active_goal = None
@@ -379,6 +505,8 @@ class PickPlace(Node):
         return trajectory
 
     def verify(self, stage):
+        if stage.name == 'grasp' and self.p['grasp_correction_enabled']:
+            return self.correct_grasp(stage)
         # Allow a short settling interval, continuously checking actual feedback.
         deadline = time.monotonic() + 3.
         last = 'No feedback'
@@ -406,6 +534,72 @@ class PickPlace(Node):
                 last = str(exc)
             time.sleep(.05)
         raise RuntimeError(last)
+
+    def execute_arm(self, trajectory, precise=True):
+        points = trajectory.joint_trajectory.points
+        if not points:
+            return
+        current = self.joint_snapshot()
+        for joint, expected in zip(trajectory.joint_trajectory.joint_names, points[0].positions):
+            if abs(current[joint] - expected) > self.p['start_joint_tolerance_rad']:
+                raise RuntimeError(f'Arm trajectory start changed ({joint})')
+        goal = FollowJointTrajectory.Goal()
+        goal.trajectory = trajectory.joint_trajectory
+        tolerance = self.p['grasp_joint_tolerance_rad'] if precise else self.p['transit_joint_tolerance_rad']
+        goal.goal_tolerance = [JointTolerance(name=j, position=tolerance) for j in goal.trajectory.joint_names]
+        goal.path_tolerance = [JointTolerance(name=j, position=.2) for j in goal.trajectory.joint_names]
+        goal.goal_time_tolerance = Duration(sec=2)
+        self.action(self.arm_execute, goal)
+
+    def correct_grasp(self, stage):
+        target = np.asarray(stage.xyz, dtype=float)
+        initial_tcp, _ = self.chain.evaluate(self.joint_snapshot(), self.p['tcp_offset_m'])
+        if np.linalg.norm(target-initial_tcp) <= self.p['reached_tolerance_m']:
+            return
+        commanded = target.copy()
+        previous_error = None
+        for attempt in range(self.p['grasp_correction_attempts'] + 1):
+            if self.stop_requested.wait(self.p['grasp_correction_settle_s']):
+                raise RuntimeError('Cancelled')
+            measured = self.joint_snapshot()
+            tcp, _ = self.chain.evaluate(measured, self.p['tcp_offset_m'])
+            error = target - tcp
+            distance = float(np.linalg.norm(error))
+            if distance <= self.p['reached_tolerance_m']:
+                return
+            if previous_error is not None and distance > previous_error + .001:
+                raise RuntimeError(f'Grasp correction worsened TCP error: {distance:.4f} m')
+            if attempt == self.p['grasp_correction_attempts']:
+                raise RuntimeError(f'Grasp correction exhausted: TCP missed original target {distance:.4f} m')
+            with self.lock:
+                latest = self.samples[-1] if self.samples else None
+            if latest and time.monotonic()-latest[0] <= self.p['target_timeout_s']:
+                observed = grasp_point(latest[2], latest[3], self.p['grasp_offset_object_m'])
+                if np.linalg.norm(observed-target) > self.p['max_target_shift_before_grasp_m']:
+                    raise RuntimeError('Object estimate moved during grasp correction')
+            delta = error * self.p['grasp_correction_gain']
+            delta *= min(1., self.p['grasp_correction_step_m']/np.linalg.norm(delta))
+            commanded = commanded + delta
+            if np.linalg.norm(commanded-target) > self.p['grasp_correction_max_offset_m']:
+                raise RuntimeError('Grasp correction exceeded total offset limit')
+            correction = Stage('grasp', commanded.copy())
+            validate_stages([correction], self.p['workspace_min_m'], self.p['workspace_max_m'])
+            self.set_status(f'CORRECT grasp {attempt+1}: error={distance:.4f}m, command={commanded.tolist()}')
+            trajectory = self.plan(correction, measured.copy())
+            with self.lock:
+                latest = self.samples[-1] if self.samples else None
+            if latest and time.monotonic()-latest[0] <= self.p['target_timeout_s']:
+                observed = grasp_point(latest[2], latest[3], self.p['grasp_offset_object_m'])
+                if np.linalg.norm(observed-target) > self.p['max_target_shift_before_grasp_m']:
+                    raise RuntimeError('Object estimate moved while planning grasp correction')
+            for point in trajectory.joint_trajectory.points:
+                for joint, angle in zip(trajectory.joint_trajectory.joint_names, point.positions):
+                    if abs(angle-measured[joint]) > self.p['grasp_correction_max_joint_step_rad']:
+                        raise RuntimeError('Grasp correction exceeded joint excursion limit')
+            if self.stop_requested.is_set():
+                raise RuntimeError('Cancelled')
+            self.execute_arm(trajectory, precise=True)
+            previous_error = distance
 
     def cycle(self, target, sequence):
         self.execution_started = False
@@ -452,15 +646,7 @@ class PickPlace(Node):
                     self.carrying = True
                 if points:
                     if stage.xyz is not None:
-                        goal = FollowJointTrajectory.Goal()
-                        goal.trajectory = trajectory.joint_trajectory
-                        joint_tolerance = self.p['grasp_joint_tolerance_rad'] if stage.name == 'grasp' else self.p['transit_joint_tolerance_rad']
-                        goal.goal_tolerance = [JointTolerance(name=j, position=joint_tolerance)
-                                               for j in trajectory.joint_trajectory.joint_names]
-                        goal.path_tolerance = [JointTolerance(name=j, position=.2)
-                                               for j in trajectory.joint_trajectory.joint_names]
-                        goal.goal_time_tolerance = Duration(sec=2)
-                        self.action(self.arm_execute, goal)
+                        self.execute_arm(trajectory, precise=stage.name == 'grasp')
                     else:
                         goal = ExecuteTrajectory.Goal()
                         goal.trajectory = trajectory
@@ -472,7 +658,7 @@ class PickPlace(Node):
                 if stage.name == 'release':
                     self.apply_scene(self.payload(remove=True))
                     self.carrying = False
-            self.set_status('DONE: placed and released; Enter starts a new cycle')
+            self.set_status('DONE: at wait position; Enter starts a new cycle')
         except Exception as exc:
             if self.execution_started:
                 self.motion_fault = True
@@ -481,7 +667,14 @@ class PickPlace(Node):
                 self.get_logger().warning('Object may be held; manual recovery required before next cycle')
         finally:
             with self.lock:
-                self.busy = False
+                returning = getattr(self, 'return_requested', None) is not None and self.return_requested.is_set()
+                if not returning:
+                    self.busy = False
+            if returning:
+                self.recover_return()
+                with self.lock:
+                    self.return_requested.clear()
+                    self.busy = False
 
 
 def main(args=None):
@@ -494,7 +687,11 @@ def main(args=None):
     except KeyboardInterrupt:
         pass
     finally:
+        node.return_requested.clear()
         node.cancel()
+        node.keyboard_stop.set()
+        if node.keyboard_thread:
+            node.keyboard_thread.join(timeout=1.)
         if node.worker:
             node.worker.join(timeout=2.)
         executor.shutdown(timeout_sec=2.)

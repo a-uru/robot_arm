@@ -1,0 +1,19 @@
+\documentclass{article}
+\usepackage{amsmath}
+\pagestyle{empty}
+\begin{document}
+% relative_transform
+\[
+{}^{B}\mathbf{T}_{O} = {}^{B}\mathbf{T}_{M_0}\left({}^{C}\mathbf{T}_{M_0}\right)^{-1}{}^{C}\mathbf{T}_{M_1}{}^{M_1}\mathbf{T}_{O}
+\]
+
+% tcp_error
+\[
+\mathbf{e}_k = \mathbf{p}_{\mathrm{target}} - \operatorname{FK}(\mathbf{q}_{\mathrm{meas},k})
+\]
+
+% correction_update
+\[
+\mathbf{p}_{\mathrm{cmd},k+1}=\mathbf{p}_{\mathrm{cmd},k}+\operatorname{sat}_{8\,\mathrm{mm}}(0.7\mathbf{e}_k)
+\]
+\end{document}

@@ -12,20 +12,30 @@ so101_pick_place:
     tcp_offset_confirmed: true
     # 物体原点から把持点まで。物体ローカル座標、m。
     grasp_offset_object_m: [0.0, 0.0, 0.0]
-    # 仮の搬送先。base_link基準、TCPが物体を解放する位置（m）。
-    place_xyz_m: [0.0, -0.2, 0.2]
+    # 通常サイクル終了時／Space中断時の待機TCP位置。base_link基準、m。
+    wait_xyz_m: [0.0, -0.2, 0.2]
+    # 搬送先。base_link基準、TCPが物体を解放する位置（m）。
+    place_xyz_m: [0.3, -0.03, 0.09]
     # URDFのgripper関節角、rad。仮値。現モデルの範囲 -0.222427～0.868233。
     gripper_open_rad: 0.8
     gripper_closed_rad: 0.0
     approach_height_m: 0.04
-    lift_height_m: 0.06
-    place_approach_height_m: 0.06
-    retreat_height_m: 0.06
+    # 搬送前に把持位置の真上で経由するTCPの絶対Z（base_link基準、m）。
+    # 把持位置がこれより高い場合は、把持高さを維持する。
+    transport_clearance_z_m: 0.15
     # 指先の到達許容誤差。5軸・位置のみ。任意の把持姿勢は拘束しない。
     position_tolerance_m: 0.004
     reached_tolerance_m: 0.015
+    # 初回の移動速度は維持。把持到達後に残る追従誤差だけを短い補正移動で縮める。
+    grasp_correction_enabled: true
+    grasp_correction_attempts: 3
+    grasp_correction_gain: 0.7
+    grasp_correction_step_m: 0.008
+    grasp_correction_max_offset_m: 0.025
+    grasp_correction_max_joint_step_rad: 0.15
+    grasp_correction_settle_s: 0.15
     # grasp以外のアーム移動の到達許容値。計画・衝突判定の精度は維持。
-    transit_reached_tolerance_m: 0.030
+    transit_reached_tolerance_m: 0.050
     transit_joint_tolerance_rad: 0.10
     # 把持への移動の関節到達許容値。従来のコントローラー設定と同じ。
     grasp_joint_tolerance_rad: 0.065
@@ -43,9 +53,9 @@ so101_pick_place:
     max_target_shift_before_grasp_m: 0.015
     start_joint_tolerance_rad: 0.06
     gripper_reached_tolerance_rad: 0.05
-    # base_link基準の作業範囲。接近・持上げ・搬送先も全てこの中に収める。
-    workspace_min_m: [-0.3,-0.30, 0.0]
-    workspace_max_m: [0.3, 0.30, 0.40]
+    # base_link基準の作業範囲。接近点・把持点・搬送先を全てこの中に収める。
+    workspace_min_m: [-0.3,-0.40, 0.0]
+    workspace_max_m: [0.3, 0.1, 0.40]
     # 把持後の衝突判定用。TCP中心の球で近似する。一辺20mmを包含。
     payload_radius_m: 0.018
     # 机は実測後に有効化。top_zがbase_linkから見た天板高さ。

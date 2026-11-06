@@ -2,9 +2,15 @@ aruco_detector:
   ros__parameters:
     # 再投影誤差が近い姿勢候補は直前の姿勢に近い方を選ぶ（平滑化ではない）。
     # 四隅のサブピクセル補正と、選択した姿勢の再投影誤差最小化。
-    corner_refinement_window: 5
+    corner_refinement_window: 3
     corner_refinement_iterations: 50
     corner_refinement_accuracy: 0.001
+    # 小さいマーカー用。角点を画像上で短時間中央値化し、動き・欠落時はリセット。
+    # 1で平滑化を無効化。5では静止時に約2フレーム相当の遅れが生じる。
+    corner_history_window: 5
+    corner_history_motion_px: 1.5
+    corner_history_timeout_s: 0.2
+    min_marker_side_px: 16.0
     pose_refine_lm: true
     pose_ambiguity_px: 0.3
     pose_history_timeout_s: 0.5
@@ -32,5 +38,5 @@ aruco_detector:
     # ^marker1 T_object: ID1から見た、使いたい物体原点の位置・姿勢。
     # xyzはID1マーカーの軸で表す。単位m。
     # 例: マーカー面から物体内部へ10mmならz=-0.010（実際に確認する）。
-    marker_to_object.xyz_m: [0.0, -0.01, -0.02]
+    marker_to_object.xyz_m: [0.0, -0.02, -0.02]
     marker_to_object.rpy_deg: [0.0, 0.0, 0.0]
