@@ -50,4 +50,4 @@ gripper_controller:
       goal_time: 2.0
       gripper:
         trajectory: 0.2
-        goal: 0.05
+        goal: 0.10  # gripper arrival tolerance [rad]

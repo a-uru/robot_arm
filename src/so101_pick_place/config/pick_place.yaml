@@ -19,7 +19,7 @@ so101_pick_place:
     # URDFのgripper関節角、rad。仮値。現モデルの範囲 -0.222427～0.868233。
     gripper_open_rad: 0.8
     gripper_closed_rad: 0.0
-    approach_height_m: 0.04
+    approach_height_m: 0.05
     # 搬送前に把持位置の真上で経由するTCPの絶対Z（base_link基準、m）。
     # 把持位置がこれより高い場合は、把持高さを維持する。
     transport_clearance_z_m: 0.15
@@ -52,7 +52,7 @@ so101_pick_place:
     joint_state_timeout_s: 1.0
     max_target_shift_before_grasp_m: 0.015
     start_joint_tolerance_rad: 0.06
-    gripper_reached_tolerance_rad: 0.05
+    gripper_reached_tolerance_rad: 0.10
     # base_link基準の作業範囲。接近点・把持点・搬送先を全てこの中に収める。
     workspace_min_m: [-0.3,-0.40, 0.0]
     workspace_max_m: [0.3, 0.1, 0.40]

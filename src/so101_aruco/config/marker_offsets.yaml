@@ -38,5 +38,5 @@ aruco_detector:
     # ^marker1 T_object: ID1から見た、使いたい物体原点の位置・姿勢。
     # xyzはID1マーカーの軸で表す。単位m。
     # 例: マーカー面から物体内部へ10mmならz=-0.010（実際に確認する）。
-    marker_to_object.xyz_m: [0.0, -0.02, -0.02]
+    marker_to_object.xyz_m: [0.0, -0.01, -0.02]
     marker_to_object.rpy_deg: [0.0, 0.0, 0.0]
